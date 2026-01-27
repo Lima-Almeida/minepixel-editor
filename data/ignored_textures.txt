@@ -1,0 +1,1074 @@
+# Ignored Textures
+# This file lists textures that should be ignored during the conversion process.
+# These textures either don't represent solid blocks or have undesirable patterns/faces
+# that should not be used in color matching.
+# One texture per line. Empty lines and lines starting with # are ignored.
+# Note: Transparent textures are automatically filtered, this list is for special cases.
+
+# === FLOWERS ===
+poppy
+dandelion
+blue_orchid
+allium
+azure_bluet
+red_tulip
+orange_tulip
+white_tulip
+pink_tulip
+oxeye_daisy
+cornflower
+lily_of_the_valley
+wither_rose
+sunflower
+lilac
+rose_bush
+peony
+torchflower
+pitcher_plant
+
+# === PLANTS AND VEGETATION ===
+grass
+tall_grass
+fern
+large_fern
+dead_bush
+seagrass
+tall_seagrass
+kelp
+kelp_plant
+bamboo
+bamboo_sapling
+sugar_cane
+wheat
+carrots
+potatoes
+beetroots
+sweet_berry_bush
+cave_vines
+cave_vines_plant
+glow_berries
+chorus_plant
+chorus_flower
+chorus_flower_dead
+nether_sprouts
+crimson_roots
+warped_roots
+hanging_roots
+spore_blossom
+azalea
+flowering_azalea
+pink_petals
+
+# === MUSHROOMS ===
+brown_mushroom
+red_mushroom
+crimson_fungus
+warped_fungus
+brown_mushroom_block
+red_mushroom_block
+mushroom_stem
+
+# === NYLIUM AND MYCELIUM ===
+# Warped Nylium
+warped_nylium
+warped_nylium_side
+# Crimson Nylium
+crimson_nylium
+crimson_nylium_side
+# Mycelium
+mycelium_side
+mycelium_top
+
+# === SAPLINGS ===
+oak_sapling
+spruce_sapling
+birch_sapling
+jungle_sapling
+acacia_sapling
+dark_oak_sapling
+mangrove_propagule
+cherry_sapling
+
+# === VINES AND CLIMBERS ===
+vine
+twisting_vines
+twisting_vines_plant
+weeping_vines
+weeping_vines_plant
+glow_lichen
+
+# === TORCHES AND LIGHTING ===
+torch
+wall_torch
+soul_torch
+soul_wall_torch
+redstone_torch
+redstone_wall_torch
+lantern
+soul_lantern
+copper_lantern
+exposed_copper_lantern
+oxidized_copper_lantern
+weathered_copper_lantern
+# Candles (all colors and states)
+candle
+candle_lit
+white_candle
+white_candle_lit
+orange_candle
+orange_candle_lit
+magenta_candle
+magenta_candle_lit
+light_blue_candle
+light_blue_candle_lit
+yellow_candle
+yellow_candle_lit
+lime_candle
+lime_candle_lit
+pink_candle
+pink_candle_lit
+gray_candle
+gray_candle_lit
+light_gray_candle
+light_gray_candle_lit
+cyan_candle
+cyan_candle_lit
+purple_candle
+purple_candle_lit
+blue_candle
+blue_candle_lit
+brown_candle
+brown_candle_lit
+green_candle
+green_candle_lit
+red_candle
+red_candle_lit
+black_candle
+black_candle_lit
+
+# === FIRE AND LIQUIDS ===
+fire
+soul_fire
+water
+flowing_water
+lava
+flowing_lava
+bubble_column
+
+# === RAILS AND REDSTONE ===
+rail
+powered_rail
+detector_rail
+activator_rail
+redstone_wire
+lever
+tripwire
+tripwire_hook
+
+# === DOORS AND TRAPDOORS ===
+# Oak
+oak_door
+oak_door_bottom
+oak_door_top
+oak_trapdoor
+# Spruce
+spruce_door
+spruce_door_bottom
+spruce_door_top
+spruce_trapdoor
+# Birch
+birch_door
+birch_door_bottom
+birch_door_top
+birch_trapdoor
+# Jungle
+jungle_door
+jungle_door_bottom
+jungle_door_top
+jungle_trapdoor
+# Acacia
+acacia_door
+acacia_door_bottom
+acacia_door_top
+acacia_trapdoor
+# Dark Oak
+dark_oak_door
+dark_oak_door_bottom
+dark_oak_door_top
+dark_oak_trapdoor
+# Mangrove
+mangrove_door
+mangrove_door_bottom
+mangrove_door_top
+mangrove_trapdoor
+# Cherry
+cherry_door
+cherry_door_bottom
+cherry_door_top
+cherry_trapdoor
+# Bamboo
+bamboo_door
+bamboo_door_bottom
+bamboo_door_top
+bamboo_trapdoor
+# Pale Oak
+pale_oak_door
+pale_oak_door_bottom
+pale_oak_door_top
+pale_oak_trapdoor
+# Crimson
+crimson_door
+crimson_door_bottom
+crimson_door_top
+crimson_trapdoor
+# Warped
+warped_door
+warped_door_bottom
+warped_door_top
+warped_trapdoor
+# Iron
+iron_door
+iron_door_bottom
+iron_door_top
+iron_trapdoor
+# Copper variants
+copper_door_bottom
+copper_door_top
+copper_trapdoor
+exposed_copper_door_bottom
+exposed_copper_door_top
+exposed_copper_trapdoor
+oxidized_copper_door_bottom
+oxidized_copper_door_top
+oxidized_copper_trapdoor
+weathered_copper_door_bottom
+weathered_copper_door_top
+weathered_copper_trapdoor
+
+# === BUTTONS AND PRESSURE PLATES ===
+stone_button
+oak_button
+spruce_button
+birch_button
+jungle_button
+acacia_button
+dark_oak_button
+mangrove_button
+cherry_button
+bamboo_button
+crimson_button
+warped_button
+polished_blackstone_button
+stone_pressure_plate
+oak_pressure_plate
+spruce_pressure_plate
+birch_pressure_plate
+jungle_pressure_plate
+acacia_pressure_plate
+dark_oak_pressure_plate
+mangrove_pressure_plate
+cherry_pressure_plate
+bamboo_pressure_plate
+crimson_pressure_plate
+warped_pressure_plate
+polished_blackstone_pressure_plate
+light_weighted_pressure_plate
+heavy_weighted_pressure_plate
+
+# === LADDERS AND FENCES ===
+ladder
+oak_fence
+spruce_fence
+birch_fence
+jungle_fence
+acacia_fence
+dark_oak_fence
+mangrove_fence
+cherry_fence
+bamboo_fence
+bamboo_fence_particle
+crimson_fence
+warped_fence
+nether_brick_fence
+iron_bars
+copper_bars
+exposed_copper_bars
+oxidized_copper_bars
+weathered_copper_bars
+glass
+glass_pane_top
+white_stained_glass_pane
+white_stained_glass_pane_top
+orange_stained_glass_pane
+orange_stained_glass_pane_top
+magenta_stained_glass_pane
+magenta_stained_glass_pane_top
+light_blue_stained_glass_pane
+light_blue_stained_glass_pane_top
+yellow_stained_glass_pane
+yellow_stained_glass_pane_top
+lime_stained_glass_pane
+lime_stained_glass_pane_top
+pink_stained_glass_pane
+pink_stained_glass_pane_top
+gray_stained_glass_pane
+gray_stained_glass_pane_top
+light_gray_stained_glass_pane
+light_gray_stained_glass_pane_top
+cyan_stained_glass_pane
+cyan_stained_glass_pane_top
+purple_stained_glass_pane
+purple_stained_glass_pane_top
+blue_stained_glass_pane
+blue_stained_glass_pane_top
+brown_stained_glass_pane
+brown_stained_glass_pane_top
+green_stained_glass_pane
+green_stained_glass_pane_top
+red_stained_glass_pane
+red_stained_glass_pane_top
+black_stained_glass_pane
+black_stained_glass_pane_top
+
+# === TECHNICAL ITEMS ===
+# Redstone Lamp
+redstone_lamp
+redstone_lamp_on
+# Comparator
+comparator
+comparator_on
+# Repeater
+repeater
+repeater_on
+repeater_1tick
+repeater_2tick
+repeater_3tick
+repeater_4tick
+# Piston
+piston
+piston_bottom
+piston_inner
+piston_side
+piston_top
+piston_top_sticky
+sticky_piston
+piston_head
+moving_piston
+# Hopper
+hopper
+# Dropper
+dropper
+# Dispenser
+dispenser
+# Observer
+observer
+observer_back
+observer_back_on
+observer_front
+observer_side
+observer_top
+# Lectern
+lectern
+# Brewing Stand
+brewing_stand
+# Cauldron
+cauldron
+cauldron_bottom
+cauldron_inner
+cauldron_side
+cauldron_top
+water_cauldron
+lava_cauldron
+powder_snow_cauldron
+powder_snow
+# Composter
+composter
+# Bell
+bell
+bell_bottom
+bell_side
+bell_top
+# Chain
+chain
+iron_chain
+copper_chain
+exposed_copper_chain
+oxidized_copper_chain
+weathered_copper_chain
+# End Rod
+end_rod
+# Lightning Rod
+lightning_rod
+lightning_rod_on
+exposed_lightning_rod
+oxidized_lightning_rod
+weathered_lightning_rod
+# Redstone Components
+redstone_dust_dot
+redstone_dust_line0
+redstone_dust_line1
+redstone_dust_overlay
+redstone_torch
+redstone_torch_off
+# Torch
+torch
+soul_torch
+copper_torch
+# Lanterns
+lantern
+soul_lantern
+copper_lantern
+exposed_copper_lantern
+oxidized_copper_lantern
+weathered_copper_lantern
+# Iron Bars
+iron_bars
+# Copper Bars
+copper_bars
+exposed_copper_bars
+oxidized_copper_bars
+weathered_copper_bars
+# Copper Grates
+copper_grate
+exposed_copper_grate
+oxidized_copper_grate
+weathered_copper_grate
+# Copper Bulbs
+copper_bulb
+copper_bulb_lit
+copper_bulb_lit_powered
+copper_bulb_powered
+exposed_copper_bulb
+exposed_copper_bulb_lit
+exposed_copper_bulb_lit_powered
+exposed_copper_bulb_powered
+oxidized_copper_bulb
+oxidized_copper_bulb_lit
+oxidized_copper_bulb_lit_powered
+oxidized_copper_bulb_powered
+weathered_copper_bulb
+weathered_copper_bulb_lit
+weathered_copper_bulb_lit_powered
+weathered_copper_bulb_powered
+
+# === OTHER NON-SOLID BLOCKS ===
+cobweb
+scaffolding
+scaffolding_bottom
+scaffolding_side
+scaffolding_top
+pointed_dripstone
+big_dripleaf
+big_dripleaf_stem
+big_dripleaf_side
+big_dripleaf_tip
+big_dripleaf_top
+small_dripleaf
+small_dripleaf_side
+small_dripleaf_stem_bottom
+small_dripleaf_stem_top
+small_dripleaf_top
+bamboo_shoot
+attached_melon_stem
+attached_pumpkin_stem
+melon_stem
+pumpkin_stem
+cocoa
+cocoa_stage0
+cocoa_stage1
+cocoa_stage2
+nether_wart
+nether_wart_stage0
+nether_wart_stage1
+nether_wart_stage2
+end_portal
+end_gateway
+nether_portal
+structure_void
+barrier
+light
+# Farmland
+farmland
+farmland_moist
+# Dirt Path
+dirt_path_side
+dirt_path_top
+# Rails
+rail
+rail_corner
+powered_rail
+powered_rail_on
+detector_rail
+detector_rail_on
+activator_rail
+activator_rail_on
+# Frosted Ice
+frosted_ice_0
+frosted_ice_1
+frosted_ice_2
+frosted_ice_3
+# Item Frames
+item_frame
+glow_item_frame
+# Flower Pot
+flower_pot
+# Cake
+cake_bottom
+cake_inner
+cake_side
+cake_top
+# End Portal Frame
+end_portal_frame_eye
+end_portal_frame_side
+end_portal_frame_top
+
+# === ANIMATED/SPECIAL BLOCKS ===
+sea_pickle
+turtle_egg
+turtle_egg_slightly_cracked
+turtle_egg_very_cracked
+sniffer_egg
+sniffer_egg_not_cracked_bottom
+sniffer_egg_not_cracked_east
+sniffer_egg_not_cracked_north
+sniffer_egg_not_cracked_south
+sniffer_egg_not_cracked_top
+sniffer_egg_not_cracked_west
+sniffer_egg_slightly_cracked_bottom
+sniffer_egg_slightly_cracked_east
+sniffer_egg_slightly_cracked_north
+sniffer_egg_slightly_cracked_south
+sniffer_egg_slightly_cracked_top
+sniffer_egg_slightly_cracked_west
+sniffer_egg_very_cracked_bottom
+sniffer_egg_very_cracked_east
+sniffer_egg_very_cracked_north
+sniffer_egg_very_cracked_south
+sniffer_egg_very_cracked_top
+sniffer_egg_very_cracked_west
+frogspawn
+# Sculk Sensor
+sculk_sensor
+sculk_sensor_bottom
+sculk_sensor_side
+sculk_sensor_tendril_active
+sculk_sensor_tendril_inactive
+sculk_sensor_top
+# Sculk Shrieker
+sculk_shrieker
+sculk_shrieker_bottom
+sculk_shrieker_can_summon_inner_top
+sculk_shrieker_inner_top
+sculk_shrieker_side
+sculk_shrieker_top
+# Sculk Vein
+sculk_vein
+# Calibrated Sculk Sensor
+calibrated_sculk_sensor
+calibrated_sculk_sensor_amethyst
+calibrated_sculk_sensor_input_side
+calibrated_sculk_sensor_top
+# Sculk Catalyst
+sculk_catalyst_bottom
+sculk_catalyst_side
+sculk_catalyst_side_bloom
+sculk_catalyst_top
+sculk_catalyst_top_bloom
+# Sculk
+sculk
+# Amethyst Buds
+amethyst_cluster
+large_amethyst_bud
+medium_amethyst_bud
+small_amethyst_bud
+# Trial Spawner
+trial_spawner_bottom
+trial_spawner_side_active
+trial_spawner_side_active_ominous
+trial_spawner_side_inactive
+trial_spawner_side_inactive_ominous
+trial_spawner_top_active
+trial_spawner_top_active_ominous
+trial_spawner_top_ejecting_reward
+trial_spawner_top_ejecting_reward_ominous
+trial_spawner_top_inactive
+trial_spawner_top_inactive_ominous
+# Vault
+vault_bottom
+vault_bottom_ominous
+vault_front_ejecting
+vault_front_ejecting_ominous
+vault_front_off
+vault_front_off_ominous
+vault_front_on
+vault_front_on_ominous
+vault_side_off
+vault_side_off_ominous
+vault_side_on
+vault_side_on_ominous
+vault_top
+vault_top_ejecting
+vault_top_ejecting_ominous
+vault_top_ominous
+# Suspicious Blocks
+suspicious_sand_0
+suspicious_sand_1
+suspicious_sand_2
+suspicious_sand_3
+suspicious_gravel_0
+suspicious_gravel_1
+suspicious_gravel_2
+suspicious_gravel_3
+# Creaking Heart
+creaking_heart
+creaking_heart_awake
+creaking_heart_dormant
+creaking_heart_top
+creaking_heart_top_awake
+creaking_heart_top_dormant
+# Eyeblossom
+closed_eyeblossom
+open_eyeblossom
+open_eyeblossom_emissive
+# Fire
+fire_0
+fire_1
+soul_fire_0
+soul_fire_1
+# Lava
+lava_flow
+lava_still
+# Water
+water_flow
+water_overlay
+water_still
+# Cave Vines
+cave_vines_lit
+cave_vines_plant_lit
+# Magma
+magma
+# Sea Lantern
+sea_lantern
+# Prismarine (animated)
+prismarine
+# Destroy Stages
+destroy_stage_0
+destroy_stage_1
+destroy_stage_2
+destroy_stage_3
+destroy_stage_4
+destroy_stage_5
+destroy_stage_6
+destroy_stage_7
+destroy_stage_8
+destroy_stage_9
+
+# === WORKSTATIONS AND FUNCTIONAL BLOCKS ===
+# Crafting Table
+crafting_table
+crafting_table_front
+crafting_table_side
+crafting_table_top
+# Cartography Table
+cartography_table
+cartography_table_side1
+cartography_table_side2
+cartography_table_side3
+cartography_table_top
+# Fletching Table
+fletching_table
+fletching_table_front
+fletching_table_side
+fletching_table_top
+# Smithing Table
+smithing_table
+smithing_table_front
+smithing_table_side
+smithing_table_top
+smithing_table_bottom
+# Loom
+loom
+loom_front
+loom_side
+loom_top
+loom_bottom
+# Stonecutter
+stonecutter
+stonecutter_bottom
+stonecutter_saw
+stonecutter_side
+stonecutter_top
+# Grindstone
+grindstone
+grindstone_pivot
+grindstone_round
+grindstone_side
+# Anvil
+anvil
+anvil_top
+chipped_anvil
+chipped_anvil_top
+damaged_anvil
+damaged_anvil_top
+# Enchanting Table
+enchanting_table
+enchanting_table_bottom
+enchanting_table_side
+enchanting_table_top
+# Brewing Stand
+brewing_stand
+brewing_stand_base
+# Furnace
+furnace
+furnace_front
+furnace_front_on
+furnace_side
+furnace_top
+# Blast Furnace
+blast_furnace
+blast_furnace_front
+blast_furnace_front_on
+blast_furnace_side
+blast_furnace_top
+# Smoker
+smoker
+smoker_front
+smoker_front_on
+smoker_side
+smoker_top
+smoker_bottom
+# Campfire
+campfire
+campfire_fire
+campfire_log
+campfire_log_lit
+# Soul Campfire
+soul_campfire
+soul_campfire_fire
+soul_campfire_log_lit
+# Beehive
+beehive
+beehive_end
+beehive_front
+beehive_front_honey
+beehive_side
+# Bee Nest
+bee_nest
+bee_nest_bottom
+bee_nest_front
+bee_nest_front_honey
+bee_nest_side
+bee_nest_top
+# Respawn Anchor
+respawn_anchor
+respawn_anchor_bottom
+respawn_anchor_side0
+respawn_anchor_side1
+respawn_anchor_side2
+respawn_anchor_side3
+respawn_anchor_side4
+respawn_anchor_top
+respawn_anchor_top_off
+# Lodestone
+lodestone
+lodestone_side
+lodestone_top
+# Crafter
+crafter
+crafter_top
+crafter_bottom
+crafter_east
+crafter_west
+crafter_north
+crafter_south
+crafter_east_crafting
+crafter_west_crafting
+crafter_north_crafting
+crafter_south_crafting
+crafter_top_crafting
+crafter_top_triggered
+crafter_east_triggered
+crafter_west_triggered
+crafter_north_triggered
+crafter_south_triggered
+# Lectern
+lectern_base
+lectern_front
+lectern_sides
+lectern_top
+# Composter
+composter_bottom
+composter_compost
+composter_ready
+composter_side
+composter_top
+# Barrel
+barrel_bottom
+barrel_side
+barrel_top
+barrel_top_open
+# Daylight Detector
+daylight_detector_inverted_top
+daylight_detector_side
+daylight_detector_top
+# Dispenser
+dispenser_front
+dispenser_front_vertical
+# Dropper
+dropper_front
+dropper_front_vertical
+# Hopper
+hopper_inside
+hopper_outside
+hopper_top
+# Jukebox
+jukebox_side
+jukebox_top
+# Note Block
+note_block
+# Target
+target_side
+target_top
+# Spawner
+spawner
+# Bookshelf
+bookshelf
+# Chiseled Bookshelf
+chiseled_bookshelf_empty
+chiseled_bookshelf_occupied
+chiseled_bookshelf_side
+chiseled_bookshelf_top
+# Wood Shelves
+acacia_shelf
+bamboo_shelf
+birch_shelf
+cherry_shelf
+crimson_shelf
+dark_oak_shelf
+jungle_shelf
+mangrove_shelf
+oak_shelf
+pale_oak_shelf
+spruce_shelf
+warped_shelf
+# TNT
+tnt_bottom
+tnt_side
+tnt_top
+# Decorated Pot
+decorated_pot
+
+# === MOB/ENTITY TEXTURES ===
+ghast_shoot
+ghast_fire
+dried_kelp_top
+dried_kelp_side
+dried_kelp_bottom
+sponge
+wet_sponge
+# Dried sponge (all hydration levels and faces)
+dried_sponge_hydration_0_top
+dried_sponge_hydration_0_bottom
+dried_sponge_hydration_0_north
+dried_sponge_hydration_0_south
+dried_sponge_hydration_0_east
+dried_sponge_hydration_0_west
+dried_sponge_hydration_1_top
+dried_sponge_hydration_1_bottom
+dried_sponge_hydration_1_north
+dried_sponge_hydration_1_south
+dried_sponge_hydration_1_east
+dried_sponge_hydration_1_west
+dried_sponge_hydration_2_top
+dried_sponge_hydration_2_bottom
+dried_sponge_hydration_2_north
+dried_sponge_hydration_2_south
+dried_sponge_hydration_2_east
+dried_sponge_hydration_2_west
+dried_sponge_hydration_3_top
+dried_sponge_hydration_3_bottom
+dried_sponge_hydration_3_north
+dried_sponge_hydration_3_south
+dried_sponge_hydration_3_east
+dried_sponge_hydration_3_west
+# Dried ghast (all hydration levels and faces)
+dried_ghast_hydration_0_top
+dried_ghast_hydration_0_bottom
+dried_ghast_hydration_0_north
+dried_ghast_hydration_0_south
+dried_ghast_hydration_0_east
+dried_ghast_hydration_0_west
+dried_ghast_hydration_0_tentacles
+dried_ghast_hydration_1_top
+dried_ghast_hydration_1_bottom
+dried_ghast_hydration_1_north
+dried_ghast_hydration_1_south
+dried_ghast_hydration_1_east
+dried_ghast_hydration_1_west
+dried_ghast_hydration_1_tentacles
+dried_ghast_hydration_2_top
+dried_ghast_hydration_2_bottom
+dried_ghast_hydration_2_north
+dried_ghast_hydration_2_south
+dried_ghast_hydration_2_east
+dried_ghast_hydration_2_west
+dried_ghast_hydration_2_tentacles
+dried_ghast_hydration_3_top
+dried_ghast_hydration_3_bottom
+dried_ghast_hydration_3_north
+dried_ghast_hydration_3_south
+dried_ghast_hydration_3_east
+dried_ghast_hydration_3_west
+dried_ghast_hydration_3_tentacles
+dragon_egg
+conduit
+end_crystal
+beacon
+
+# === COMMAND/TECHNICAL BLOCKS ===
+# Command Block
+command_block
+command_block_back
+command_block_conditional
+command_block_front
+command_block_side
+# Chain Command Block
+chain_command_block
+chain_command_block_back
+chain_command_block_conditional
+chain_command_block_front
+chain_command_block_side
+# Repeating Command Block
+repeating_command_block
+repeating_command_block_back
+repeating_command_block_conditional
+repeating_command_block_front
+repeating_command_block_side
+# Jigsaw
+jigsaw
+jigsaw_bottom
+jigsaw_lock
+jigsaw_side
+jigsaw_top
+# Structure Block
+structure_block
+structure_block_corner
+structure_block_data
+structure_block_load
+structure_block_save
+# Reinforced Deepslate
+reinforced_deepslate_bottom
+reinforced_deepslate_side
+reinforced_deepslate_top
+
+# === BLOCKS WITH FACES ===
+pumpkin
+carved_pumpkin
+jack_o_lantern
+creeper_head
+zombie_head
+skeleton_skull
+wither_skeleton_skull
+player_head
+dragon_head
+piglin_head
+
+# === ORES ===
+coal_ore
+deepslate_coal_ore
+copper_ore
+deepslate_copper_ore
+iron_ore
+deepslate_iron_ore
+gold_ore
+deepslate_gold_ore
+redstone_ore
+deepslate_redstone_ore
+emerald_ore
+deepslate_emerald_ore
+lapis_ore
+deepslate_lapis_ore
+diamond_ore
+deepslate_diamond_ore
+nether_gold_ore
+nether_quartz_ore
+ancient_debris_top
+ancient_debris_side
+
+# === CORAL BLOCKS ===
+brain_coral_block
+bubble_coral_block
+fire_coral_block
+horn_coral_block
+tube_coral_block
+dead_brain_coral_block
+dead_bubble_coral_block
+dead_fire_coral_block
+dead_horn_coral_block
+dead_tube_coral_block
+
+# === SHULKER BOXES ===
+shulker_box
+white_shulker_box
+orange_shulker_box
+magenta_shulker_box
+light_blue_shulker_box
+yellow_shulker_box
+lime_shulker_box
+pink_shulker_box
+gray_shulker_box
+light_gray_shulker_box
+cyan_shulker_box
+purple_shulker_box
+blue_shulker_box
+brown_shulker_box
+green_shulker_box
+red_shulker_box
+black_shulker_box
+
+# === FROGLIGHTS ===
+ochre_froglight_side
+ochre_froglight_top
+pearlescent_froglight_side
+pearlescent_froglight_top
+verdant_froglight_side
+verdant_froglight_top
+
+# === TEST BLOCKS ===
+test_instance_block
+test_block_accept
+test_block_fail
+test_block_log
+test_block_start
+debug
+debug2
+
+# === DECORATIVE/SPECIAL BLOCKS ===
+# Grass Block
+grass_block_side
+grass_block_side_overlay
+grass_block_snow
+grass_block_top
+# Purpur
+purpur_block
+purpur_pillar
+purpur_pillar_top
+# Amethyst
+amethyst_block
+budding_amethyst
+# Crying Obsidian
+crying_obsidian
+# Gilded Blackstone
+gilded_blackstone
+# Netherite Block
+netherite_block
+# Warped Stem
+warped_stem
+warped_stem_top
+stripped_warped_stem
+stripped_warped_stem_top
+# Crimson Stem
+crimson_stem
+crimson_stem_top
+stripped_crimson_stem
+stripped_crimson_stem_top
