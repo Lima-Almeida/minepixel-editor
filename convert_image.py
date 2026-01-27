@@ -3,6 +3,7 @@ Converts any image from the 'input' folder to Minecraft pixel art.
 Place an image in the 'input' folder and run this script.
 """
 
+import argparse
 from pathlib import Path
 from app.minecraft.texturepack.parser import TexturePackParser
 from app.minecraft.texturepack.analyzer import TextureAnalyzer
@@ -38,6 +39,18 @@ def find_input_image(input_dir: Path) -> Path:
 
 
 def main():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description='Convert images to Minecraft pixel art',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        '--ignore-log-tops',
+        action='store_true',
+        help='Ignore all log_top textures (acacia_log_top, birch_log_top, etc.)'
+    )
+    args = parser.parse_args()
+    
     print("=" * 70)
     print("MINEPIXEL EDITOR - Automatic Conversion to Minecraft Pixel Art")
     print("=" * 70)
@@ -107,6 +120,14 @@ def main():
         blocks = parser.parse()
         print(f"   [OK] {len(blocks)} textures loaded")
         print(f"   [INFO] Manual filters applied (see data/ignored_textures.txt)")
+        
+        # Filter log_top textures if option is enabled
+        if args.ignore_log_tops:
+            original_count = len(blocks)
+            blocks = [b for b in blocks if not b.block_id.endswith('_log_top')]
+            filtered_count = original_count - len(blocks)
+            if filtered_count > 0:
+                print(f"   [INFO] Filtered out {filtered_count} log_top textures")
     except Exception as e:
         print(f"   [ERROR] Error loading textures: {e}")
         return
