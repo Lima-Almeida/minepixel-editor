@@ -60,6 +60,10 @@ class MinepixelEditorApp:
         self._active_blocks_list = []
         self._ignored_blocks_list = []
         
+        # Temporary data for image resize confirmation
+        self._pending_image_path = None
+        self._pending_resize_dimensions = None
+        
     def setup(self):
         """Initialize Dear PyGui and setup UI."""
         dpg.create_context()
@@ -187,17 +191,29 @@ class MinepixelEditorApp:
             no_move=False,
             no_resize=True,
             no_collapse=True,
-            no_close=True
+            no_close=True,
+            no_scrollbar=True
         ):
+            # Header (fixed)
             dpg.add_text("Block Statistics")
             dpg.add_separator()
             dpg.add_text("Load an image to see statistics", tag="sidebar_placeholder")
             
-            # Container for block stats
-            with dpg.group(tag=self.block_stats_tag):
+            # Totals section (fixed, not scrollable)
+            with dpg.group(tag=f"{self.block_stats_tag}_totals"):
                 pass
             
-            # Export button
+            # Scrollable container for block stats list only
+            with dpg.child_window(
+                tag=f"{self.block_stats_tag}_scroll",
+                width=-1,
+                height=-60,  # Leave space for totals above and button below
+                border=True
+            ):
+                with dpg.group(tag=self.block_stats_tag):
+                    pass
+            
+            # Footer with export button (fixed at bottom)
             dpg.add_separator()
             dpg.add_button(label="Export Block List to TXT", callback=self._open_export_dialog,
                          width=-1, height=30)
@@ -741,8 +757,37 @@ class MinepixelEditorApp:
             dpg.set_value(self.status_text_tag, f"ERROR: File not found: {file_path}")
             return
         
-        self.last_loaded_image = file_path
-        self._convert_and_load_image(file_path)
+        # Check image size and show resize confirmation if needed
+        try:
+            from PIL import Image
+            
+            with Image.open(file_path) as img:
+                width, height = img.size
+            
+            # Check if resize is needed (max 256x256)
+            max_dimension = 256
+            needs_resize = width > max_dimension or height > max_dimension
+            
+            if needs_resize:
+                # Calculate proportional resize
+                scale = max_dimension / max(width, height)
+                new_width = int(width * scale)
+                new_height = int(height * scale)
+                
+                # Store for later use
+                self._pending_image_path = file_path
+                self._pending_resize_dimensions = (new_width, new_height)
+                
+                # Show confirmation popup
+                self._show_resize_confirmation_popup(file_path, width, height, new_width, new_height)
+            else:
+                # Load directly without resize
+                self.last_loaded_image = file_path
+                self._convert_and_load_image(file_path)
+                
+        except Exception as e:
+            dpg.set_value(self.status_text_tag, f"ERROR loading image: {e}")
+            return
     
     def _export_block_list(self, sender, app_data):
         """Exports block list to TXT file."""
@@ -769,7 +814,70 @@ class MinepixelEditorApp:
         except Exception as e:
             dpg.set_value(self.status_text_tag, f"Export ERROR: {e}")
     
-    def _convert_and_load_image(self, file_path: Path):
+    def _show_resize_confirmation_popup(self, file_path: Path, orig_width: int, orig_height: int, 
+                                       new_width: int, new_height: int):
+        """Shows a popup to confirm image resize."""
+        popup_tag = "resize_confirmation_popup"
+        
+        # Delete existing popup if any
+        if dpg.does_item_exist(popup_tag):
+            dpg.delete_item(popup_tag)
+        
+        with dpg.window(
+            label="Image Resize Required",
+            tag=popup_tag,
+            modal=True,
+            show=True,
+            width=500,
+            height=250,
+            pos=[690, 325],
+            no_resize=True,
+            no_move=True
+        ):
+            dpg.add_text("The selected image exceeds the maximum size of 256x256 pixels.")
+            dpg.add_spacer(height=5)
+            dpg.add_text(f"Original size: {orig_width}x{orig_height} pixels")
+            dpg.add_text(f"Will be resized to: {new_width}x{new_height} pixels")
+            dpg.add_spacer(height=5)
+            dpg.add_text("This ensures the final pixel art fits within Minecraft's")
+            dpg.add_text("performance limits (256x256 blocks maximum).")
+            dpg.add_spacer(height=15)
+            
+            with dpg.group(horizontal=True):
+                dpg.add_spacer(width=120)
+                dpg.add_button(
+                    label="Accept and Import",
+                    callback=lambda: self._confirm_resize_and_load(popup_tag),
+                    width=130,
+                    height=30
+                )
+                dpg.add_spacer(width=10)
+                dpg.add_button(
+                    label="Cancel",
+                    callback=lambda: self._cancel_resize(popup_tag),
+                    width=80,
+                    height=30
+                )
+    
+    def _confirm_resize_and_load(self, popup_tag: str):
+        """Confirms resize and loads the image."""
+        # Close popup
+        if dpg.does_item_exist(popup_tag):
+            dpg.delete_item(popup_tag)
+        
+        # Load image with resize
+        self.last_loaded_image = self._pending_image_path
+        self._convert_and_load_image(self._pending_image_path, target_size=self._pending_resize_dimensions)
+    
+    def _cancel_resize(self, popup_tag: str):
+        """Cancels the resize operation."""
+        # Close popup
+        if dpg.does_item_exist(popup_tag):
+            dpg.delete_item(popup_tag)
+        
+        dpg.set_value(self.status_text_tag, "Image import cancelled")
+    
+    def _convert_and_load_image(self, file_path: Path, target_size=None):
         """Converts and loads image to canvas."""
         try:
             from PIL import Image
@@ -777,8 +885,11 @@ class MinepixelEditorApp:
             with Image.open(file_path) as img:
                 width, height = img.size
             
+            # Use target_size if provided, otherwise use original
+            display_size = target_size if target_size else (width, height)
+            
             dpg.set_value(self.status_text_tag, 
-                f"Converting {file_path.name} ({width}x{height}) to blocks...")
+                f"Converting {file_path.name} ({display_size[0]}x{display_size[1]}) to blocks...")
             self._show_progress(0.0)
             
             # Convert image
@@ -787,7 +898,7 @@ class MinepixelEditorApp:
             def update_progress(progress):
                 self._show_progress(progress)
             
-            block_grid = mapper.map_image(file_path, target_size=None, progress_callback=update_progress)
+            block_grid = mapper.map_image(file_path, target_size=target_size, progress_callback=update_progress)
             
             # Render
             dpg.set_value(self.status_text_tag, f"Rendering {file_path.name}...")
@@ -863,41 +974,40 @@ class MinepixelEditorApp:
         if dpg.does_item_exist("sidebar_placeholder"):
             dpg.hide_item("sidebar_placeholder")
         
-        # Add totals
-        dpg.add_text(f"Total Blocks: {total_blocks:,}", parent=self.block_stats_tag)
-        dpg.add_text(f"Unique Types: {len(block_stats)}", parent=self.block_stats_tag)
-        dpg.add_separator(parent=self.block_stats_tag)
+        # Add totals to the fixed section (not scrollable)
+        dpg.add_text(f"Total Blocks: {total_blocks:,}", parent=f"{self.block_stats_tag}_totals")
+        dpg.add_text(f"Unique Types: {len(block_stats)}", parent=f"{self.block_stats_tag}_totals")
+        dpg.add_separator(parent=f"{self.block_stats_tag}_totals")
         
         # Sort by count
         sorted_blocks = sorted(block_stats.items(), key=lambda x: x[1]['total'], reverse=True)
         
-        # Scrollable list
-        with dpg.child_window(parent=self.block_stats_tag, height=650, width=320):
-            for base_name, stats in sorted_blocks:
-                display_block = stats['blocks'].get('normal') or next(iter(stats['blocks'].values()))
-                has_variants = len(stats['variants']) > 1
-                
-                if has_variants:
-                    with dpg.group(horizontal=True):
-                        if display_block and display_block.texture_path.exists():
-                            self._add_mini_texture(display_block)
-                        
-                        with dpg.collapsing_header(label=f"{base_name}: {stats['total']} blocks",
-                                                  default_open=False):
-                            for variant, count in sorted(stats['variants'].items()):
-                                variant_block = stats['blocks'].get(variant)
-                                if variant_block:
-                                    with dpg.group(horizontal=True):
-                                        dpg.add_text(f"  • {variant.capitalize()}: {count}")
-                                        if variant_block.texture_path.exists():
-                                            self._add_mini_texture(variant_block)
-                else:
-                    with dpg.group(horizontal=True):
-                        if display_block and display_block.texture_path.exists():
-                            self._add_mini_texture(display_block)
-                        dpg.add_text(f"{base_name}: {stats['total']}")
-                
-                dpg.add_spacer(height=4)
+        # Add blocks to scrollable list
+        for base_name, stats in sorted_blocks:
+            display_block = stats['blocks'].get('normal') or next(iter(stats['blocks'].values()))
+            has_variants = len(stats['variants']) > 1
+            
+            if has_variants:
+                with dpg.group(horizontal=True, parent=self.block_stats_tag):
+                    if display_block and display_block.texture_path.exists():
+                        self._add_mini_texture(display_block)
+                    
+                    with dpg.collapsing_header(label=f"{base_name}: {stats['total']} blocks",
+                                              default_open=False):
+                        for variant, count in sorted(stats['variants'].items()):
+                            variant_block = stats['blocks'].get(variant)
+                            if variant_block:
+                                with dpg.group(horizontal=True):
+                                    dpg.add_text(f"  • {variant.capitalize()}: {count}")
+                                    if variant_block.texture_path.exists():
+                                        self._add_mini_texture(variant_block)
+            else:
+                with dpg.group(horizontal=True, parent=self.block_stats_tag):
+                    if display_block and display_block.texture_path.exists():
+                        self._add_mini_texture(display_block)
+                    dpg.add_text(f"{base_name}: {stats['total']}")
+            
+            dpg.add_spacer(height=4, parent=self.block_stats_tag)
     
     def _add_mini_texture(self, block):
         """Adds mini texture preview."""
