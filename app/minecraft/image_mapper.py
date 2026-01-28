@@ -18,8 +18,19 @@ class ImageToBlockMapper:
         self.matcher = matcher
 
     
-    def map_image(self, image_path: Path, *, target_size: tuple[int, int] | None = None) -> List[List[BlockTexture]]:
-
+    def map_image(self, image_path: Path, *, target_size: tuple[int, int] | None = None, 
+                  progress_callback=None) -> List[List[BlockTexture]]:
+        """
+        Maps an image to Minecraft blocks.
+        
+        Args:
+            image_path: Path to the image
+            target_size: Optional target size (width, height)
+            progress_callback: Optional callback function(progress: float) called with 0.0-1.0
+        
+        Returns:
+            Grid of BlockTexture objects
+        """
         with Image.open(image_path) as img:
             img = img.convert("RGB")
 
@@ -41,6 +52,12 @@ class ImageToBlockMapper:
                 pixel_lab = tuple(lab[y, x])
                 block = self.matcher.match_lab(pixel_lab)
                 row.append(block)
+            
             grid.append(row)
+            
+            # Update progress
+            if progress_callback:
+                progress = (y + 1) / height
+                progress_callback(progress)
         
         return grid
