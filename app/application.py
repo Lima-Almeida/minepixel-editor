@@ -953,9 +953,11 @@ class MinepixelEditorApp:
     
     def _update_sidebar_stats(self, grid):
         """Updates sidebar with block statistics."""
-        # Clear previous
+        # Clear previous stats from both containers
         if dpg.does_item_exist(self.block_stats_tag):
             dpg.delete_item(self.block_stats_tag, children_only=True)
+        if dpg.does_item_exist(f"{self.block_stats_tag}_totals"):
+            dpg.delete_item(f"{self.block_stats_tag}_totals", children_only=True)
         
         # Analyze
         block_stats = self.exporter.analyze_grid_blocks(
