@@ -665,16 +665,30 @@ class MinepixelEditorApp:
     def _on_mouse_move(self, sender, app_data):
         """Handle mouse move for panning."""
         if self.canvas and self.canvas._is_panning:
-            self.canvas.update_pan()
-            self.canvas.render()  # Render during pan for smooth movement
+            # Verify middle button is still pressed
+            if dpg.is_mouse_button_down(dpg.mvMouseButton_Middle):
+                self.canvas.update_pan()
+                # Don't render during pan - only update position
+                # This eliminates flicker completely
+            else:
+                # Button was released but event wasn't caught - force stop
+                self.canvas.force_stop_pan()
     
     def run(self):
         """Run the application main loop."""
         dpg.show_metrics()
         
         while dpg.is_dearpygui_running():
+            # Update canvas during pan (smooth rendering in main loop at 60 FPS)
+            if self.canvas and self.canvas._is_panning:
+                current_time = time.time()
+                # Render at 60 FPS during pan for smooth visual feedback
+                if current_time - self.canvas._last_pan_render_time >= self.canvas._pan_render_delay:
+                    self.canvas._last_pan_render_time = current_time
+                    self.canvas.render()
+            
             # Process pending renders from canvas
-            if self.canvas and self.canvas._pending_render:
+            elif self.canvas and self.canvas._pending_render:
                 current_time = time.time()
                 if current_time - self.canvas._last_render_time >= self.canvas._render_delay:
                     self.canvas.render()

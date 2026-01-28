@@ -1,4 +1,4 @@
-"""
+﻿"""
 Canvas Widget for Minecraft Block Pixel Art Editor using Dear PyGui.
 Provides an interactive canvas for viewing and editing block grids.
 """
@@ -122,6 +122,10 @@ class CanvasWidget:
         self._last_hover_render_time = 0.0
         self._hover_render_delay = 0.05  # 50ms = 20 FPS for hover updates (smooth enough)
         
+        # Pan render throttling
+        self._last_pan_render_time = 0.0
+        self._pan_render_delay = 0.016  # 60 FPS for pan (smooth and responsive)
+        
         # DEBOUNCED RENDERING: Accumulate changes and render in batches
         self._pending_render = False
         self._dirty_blocks: set = set()  # Set of (x, y) coordinates that need redraw
@@ -207,11 +211,12 @@ class CanvasWidget:
     
     def stop_pan(self) -> None:
         """Stops panning mode. Call this when middle mouse button is released."""
-        if self._is_panning:  # Only render if we were actually panning
-            self._is_panning = False
-            self.render()
-        else:
-            self._is_panning = False  # Ensure flag is cleared even if already false
+        was_panning = self._is_panning
+        self._is_panning = False
+        
+        # Only render once if we were actually panning
+        if was_panning:
+            self.render(force_full=True)
     
     def force_stop_pan(self) -> None:
         """Force stops panning (safety mechanism for stuck pan states)."""
@@ -693,25 +698,39 @@ class CanvasWidget:
         self._pending_render = False
         
         try:
+            # OPTIMIZATION: During panning, skip clear and just redraw
+            # This significantly reduces flickering
+            is_panning = self._is_panning
+            
             # OPTIMIZATION: Use dirty region rendering for small changes during drawing
             # Only use dirty rendering when:
             # 1. We have a small number of dirty blocks (< 50)
             # 2. We're not being forced to do a full render
             # 3. Grid exists and is not empty
+            # 4. Not panning (pan needs full redraw for correct positioning)
             use_dirty_render = (len(self._dirty_blocks) > 0 and 
                               len(self._dirty_blocks) < 50 and 
                               not force_full and 
-                              self._grid)
+                              self._grid and
+                              not is_panning)
             
             if use_dirty_render:
                 self._render_dirty_blocks()
                 return
-            # Clear only block drawings, keep grid and hover for selective update
-            dpg.delete_item(self.tag, children_only=True)
             
-            # Clear item tracking lists (they'll be repopulated)
-            self._grid_items.clear()
-            self._hover_items.clear()
+            # Only clear if not panning to reduce flicker
+            if not is_panning:
+                # Clear only block drawings, keep grid and hover for selective update
+                dpg.delete_item(self.tag, children_only=True)
+                
+                # Clear item tracking lists (they'll be repopulated)
+                self._grid_items.clear()
+                self._hover_items.clear()
+            else:
+                # During pan, just clear blocks but faster
+                dpg.delete_item(self.tag, children_only=True)
+                self._grid_items.clear()
+                # Don't clear hover items during pan
             
             if not self._grid:
                 # Draw "no image" text
