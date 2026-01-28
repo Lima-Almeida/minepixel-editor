@@ -68,8 +68,13 @@ class MinepixelEditorApp:
         with dpg.window(label="Minepixel Editor - Minecraft Pixel Art Generator", 
                        tag="main_window", width=1860, height=850, pos=[10, 10]):
             
-            # Canvas - takes up almost all space (leaving room for footer)
-            self.canvas = CanvasWidget(tag="canvas", width=1840, height=800, parent="main_window")
+            # Menu bar at the top
+            self._create_menu_bar()
+            
+            dpg.add_separator()
+            
+            # Canvas - takes up space between menu and footer
+            self.canvas = CanvasWidget(tag="canvas", width=1840, height=760, parent="main_window")
         
         # Create status bar/footer as floating window (always on top)
         self._create_status_bar()
@@ -102,8 +107,8 @@ class MinepixelEditorApp:
         dpg.set_primary_window("main_window", True)
         
         # Position floating panels
-        dpg.set_item_pos(self.left_panel_tag, [20, 20])
-        dpg.set_item_pos(self.sidebar_tag, [1490, 20])
+        dpg.set_item_pos(self.left_panel_tag, [20, 80])
+        dpg.set_item_pos(self.sidebar_tag, [1490, 80])
         dpg.set_item_pos("status_bar_window", [10, 820])
         
         # Ensure status bar is always on top
@@ -124,6 +129,7 @@ class MinepixelEditorApp:
             no_scrollbar=True
         ):
             with dpg.group(horizontal=True, tag=self.status_group_tag):
+                dpg.add_spacer(width=10)
                 dpg.add_text("Loading textures...", tag=self.status_text_tag)
                 dpg.add_spacer(width=20)
                 dpg.add_progress_bar(
@@ -132,24 +138,41 @@ class MinepixelEditorApp:
                     width=200,
                     show=False
                 )
+    
+    def _create_header(self):
+        """Creates the header bar as a floating window always on top."""
+        with dpg.window(
+            label="Header",
+            tag="header_window",
+            width=1860,
+            height=50,
+            no_title_bar=True,
+            no_move=True,
+            no_resize=True,
+            no_collapse=True,
+            no_close=True,
+            no_scrollbar=True
+        ):
+            with dpg.group(horizontal=True):
+                dpg.add_spacer(width=10)
+                dpg.add_button(label="Load Image", callback=self._open_file_dialog, height=30)
+                dpg.add_button(label="Export", callback=self._open_export_image_dialog, height=30)
+                dpg.add_button(label="Settings", callback=self._open_settings_modal, height=30)
                 dpg.add_spacer(width=20)
-                # Add menu buttons to status bar
-                dpg.add_button(label="Load Image", callback=self._open_file_dialog, height=25)
-                dpg.add_button(label="Export", callback=self._open_export_image_dialog, height=25)
-                dpg.add_button(label="Settings", callback=self._open_settings_modal, height=25)
-                dpg.add_button(label="Zoom +", callback=lambda: self.canvas.zoom_in(), height=25, width=60)
-                dpg.add_button(label="Zoom -", callback=lambda: self.canvas.zoom_out(), height=25, width=60)
-                dpg.add_button(label="Fit", callback=lambda: self.canvas.zoom_to_fit(), height=25, width=40)
-                dpg.add_button(label="Grid", callback=self._toggle_grid, height=25, width=40)
+                dpg.add_button(label="Zoom +", callback=lambda: self.canvas.zoom_in(), height=30, width=70)
+                dpg.add_button(label="Zoom -", callback=lambda: self.canvas.zoom_out(), height=30, width=70)
+                dpg.add_button(label="Fit", callback=lambda: self.canvas.zoom_to_fit(), height=30, width=50)
+                dpg.add_button(label="Grid", callback=self._toggle_grid, height=30, width=50)
     
     def _create_menu_bar(self):
         """Creates the top menu bar with all controls."""
         with dpg.group(horizontal=True):
             dpg.add_button(label="Load Image", callback=self._open_file_dialog)
-            dpg.add_button(label="Export Image", callback=self._open_export_image_dialog)
+            dpg.add_button(label="Export", callback=self._open_export_image_dialog)
             dpg.add_button(label="Settings", callback=self._open_settings_modal)
-            dpg.add_button(label="Zoom In (+)", callback=lambda: self.canvas.zoom_in())
-            dpg.add_button(label="Zoom Out (-)", callback=lambda: self.canvas.zoom_out())
+            dpg.add_spacer(width=10)
+            dpg.add_button(label="Zoom +", callback=lambda: self.canvas.zoom_in())
+            dpg.add_button(label="Zoom -", callback=lambda: self.canvas.zoom_out())
             dpg.add_button(label="Fit to Window", callback=lambda: self.canvas.zoom_to_fit())
             dpg.add_button(label="Reset View", callback=lambda: self.canvas.reset_view())
             dpg.add_button(label="Toggle Grid", callback=self._toggle_grid)
@@ -160,7 +183,7 @@ class MinepixelEditorApp:
             label="Block Statistics",
             tag=self.sidebar_tag,
             width=360,
-            height=790,
+            height=720,
             no_move=False,
             no_resize=True,
             no_collapse=True,
@@ -185,7 +208,7 @@ class MinepixelEditorApp:
             label="Tools",
             tag=self.left_panel_tag,
             width=290,
-            height=790,
+            height=720,
             no_move=False,
             no_resize=True,
             no_collapse=True,
