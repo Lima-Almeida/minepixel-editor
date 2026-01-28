@@ -17,10 +17,10 @@ Image editor with the special functionality of converting any image into **Minec
 Rendering            ████████████████████ 100% 
 Image Conversion     ████████████████████ 100% 
 Color Matching       ████████████████████ 100% 
-Basic Editing        ████░░░░░░░░░░░░░░░░ 20% 
-Graphical Interface  ░░░░░░░░░░░░░░░░░░░░   0% 
-Tools                ░░░░░░░░░░░░░░░░░░░░   0% 
-Cache/Persistence    ████░░░░░░░░░░░░░░░░  20% 
+Basic Editing        █████████████████░░░ 80% 
+Graphical Interface  █████████████░░░░░░░ 60% 
+Tools                ░░░░░░░░░░░░░░░░░░░░ 0% 
+Cache/Persistence    ████░░░░░░░░░░░░░░░░ 20% 
 ```
 
 

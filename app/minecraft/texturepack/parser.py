@@ -17,10 +17,17 @@ class TexturePackParser:
         self.texturepack_root = Path(texturepack_root)
 
     
-    def parse(self) -> List[BlockTexture]:
+    def parse(self, ignore_non_blocks: bool = False) -> List[BlockTexture]:
+        """
+        Parse texture pack and return list of block textures.
+        
+        Args:
+            ignore_non_blocks: If True, filters blocks using ignored_textures.txt
+                             If False, loads ALL blocks (filtering done elsewhere)
+        """
         blocks: List[BlockTexture] = []
 
-        for texture_path in iter_block_texture_files(self.texturepack_root):
+        for texture_path in iter_block_texture_files(self.texturepack_root, ignore_non_blocks=ignore_non_blocks):
             block_id = texture_name_to_block_id(texture_path)
             block_id = normalize_block_id(block_id)
 
