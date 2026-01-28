@@ -88,10 +88,11 @@ Final Pixel Art
 
 ## Next Steps
 
-Implement the Basic Graphical Interface (app/ui/):
-1. Main window with canvas
-2. Image loading
-3. Conversion visualization
-4. Zoom in/out
-5. Basic block selector
+Implement basic tools and improve rendering efficience:
+1. Brush, eraser, fill, eyedropper, etc.
+2. Undo/Redo
+3. Other export types (.schematic, custom extension, etc)
+4. Improve UI/UX
+5. Improve rendering efficience
+6. Building guide
 
