@@ -97,5 +97,5 @@ Implement basic tools and improve rendering efficience:
 2. Other export types (.schematic, custom extension, etc)
 3. Building guide
 4. Improve UI/UX
-5. Improve rendering efficience
+5. Improve rendering efficiency
 
