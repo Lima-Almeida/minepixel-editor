@@ -19,7 +19,7 @@ Image Conversion     ███████████████████�
 Color Matching       ████████████████████ 100% 
 Basic Editing        █████████████████░░░ 80% 
 Graphical Interface  █████████████░░░░░░░ 60% 
-Tools                ░░░░░░░░░░░░░░░░░░░░ 0% 
+Tools                ████░░░░░░░░░░░░░░░░ 20% 
 Cache/Persistence    ████░░░░░░░░░░░░░░░░ 20% 
 ```
 
@@ -89,10 +89,9 @@ Final Pixel Art
 ## Next Steps
 
 Implement basic tools and improve rendering efficience:
-1. Brush, eraser, fill, eyedropper, etc.
-2. Undo/Redo
-3. Other export types (.schematic, custom extension, etc)
+1. Undo/Redo
+2. Other export types (.schematic, custom extension, etc)
+3. Building guide
 4. Improve UI/UX
 5. Improve rendering efficience
-6. Building guide
 

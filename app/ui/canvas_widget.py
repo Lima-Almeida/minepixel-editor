@@ -88,6 +88,7 @@ class CanvasWidget:
         # Current tool state
         self._current_block: Optional[BlockTexture] = None
         self._tool_callback: Optional[Callable] = None
+        self._active_tool = None  # Active tool instance
         
         # Callbacks
         self.on_block_changed: Optional[Callable] = None
@@ -161,6 +162,15 @@ class CanvasWidget:
         """
         if self._is_drawing:
             self._is_drawing = False
+            
+            # Notify active tool
+            if self._active_tool:
+                # Get last grid position
+                local_x, local_y = self._get_local_mouse_pos()
+                grid_x, grid_y = self.screen_to_grid(local_x, local_y)
+                if 0 <= grid_x < self._grid_width and 0 <= grid_y < self._grid_height:
+                    self._active_tool.on_mouse_up(self, grid_x, grid_y, "left")
+            
             self._last_drawn_block = (-1, -1)
             
             # Force a final full render to ensure everything is properly displayed
@@ -441,6 +451,23 @@ class CanvasWidget:
             callback: Function(canvas, x, y, button) called on mouse interaction
         """
         self._tool_callback = callback
+    
+    def set_active_tool(self, tool) -> None:
+        """
+        Sets the active tool.
+        
+        Args:
+            tool: Tool instance (BaseTool subclass)
+        """
+        if self._active_tool:
+            self._active_tool.deactivate()
+        self._active_tool = tool
+        if self._active_tool:
+            self._active_tool.activate()
+    
+    def get_active_tool(self):
+        """Returns the currently active tool."""
+        return self._active_tool
     
     def _schedule_render(self) -> None:
         """Schedules a render for the next frame, avoiding excessive renders."""
@@ -983,23 +1010,40 @@ class CanvasWidget:
                 dpg.delete_item(item)
         self._hover_items.clear()
         
-        x, y = self._current_hover_block
-        if 0 <= x < self._grid_width and 0 <= y < self._grid_height:
+        center_x, center_y = self._current_hover_block
+        if 0 <= center_x < self._grid_width and 0 <= center_y < self._grid_height:
+            # Get brush size from active tool
+            brush_size = 1
+            if self._active_tool and hasattr(self._active_tool, 'get_brush_size'):
+                brush_size = self._active_tool.get_brush_size()
+            
+            # Calculate brush area
+            radius = brush_size // 2
+            
             # OPTIMIZATION: Inline coordinate calculation
             scaled_block_size = self._block_size * self._zoom_level
-            screen_x = x * scaled_block_size + self._pan_x
-            screen_y = y * scaled_block_size + self._pan_y
             
             try:
-                # Draw highlight rectangle
-                item = dpg.draw_rectangle(
-                    (screen_x, screen_y),
-                    (screen_x + scaled_block_size, screen_y + scaled_block_size),
-                    color=(255, 255, 255, 200),
-                    thickness=2,
-                    parent=self.tag
-                )
-                self._hover_items.append(item)
+                # Draw highlight for each block in brush area
+                for dy in range(-radius, radius + 1):
+                    for dx in range(-radius, radius + 1):
+                        block_x = center_x + dx
+                        block_y = center_y + dy
+                        
+                        # Only draw if within grid bounds
+                        if 0 <= block_x < self._grid_width and 0 <= block_y < self._grid_height:
+                            screen_x = block_x * scaled_block_size + self._pan_x
+                            screen_y = block_y * scaled_block_size + self._pan_y
+                            
+                            # Draw highlight rectangle
+                            item = dpg.draw_rectangle(
+                                (screen_x, screen_y),
+                                (screen_x + scaled_block_size, screen_y + scaled_block_size),
+                                color=(255, 255, 255, 200),
+                                thickness=2,
+                                parent=self.tag
+                            )
+                            self._hover_items.append(item)
             except (SystemError, Exception):
                 # Parent was deleted, ignore
                 pass
@@ -1022,7 +1066,11 @@ class CanvasWidget:
         self._last_drawn_block = (grid_x, grid_y)
         self._drawing_blocks_cache = []
         
-        self._handle_draw(local_x, local_y, "left")
+        # Use active tool if available
+        if self._active_tool and 0 <= grid_x < self._grid_width and 0 <= grid_y < self._grid_height:
+            self._active_tool.on_mouse_down(self, grid_x, grid_y, "left")
+        else:
+            self._handle_draw(local_x, local_y, "left")
     
     def _on_mouse_move(self, sender, app_data):
         """Handles mouse movement for hover."""
@@ -1044,19 +1092,23 @@ class CanvasWidget:
         
         # Continue drawing ONLY if left mouse button is held (not middle or right)
         if dpg.is_mouse_button_down(dpg.mvMouseButton_Left) and not dpg.is_mouse_button_down(dpg.mvMouseButton_Middle):
-            # LINE INTERPOLATION: Draw line from last position to current position
-            if self._last_drawn_block != (-1, -1) and self._current_block:
-                last_x, last_y = self._last_drawn_block
-                
-                # Only interpolate if we've moved to a different block
-                if (grid_x, grid_y) != (last_x, last_y):
-                    # Draw interpolated line between last and current position
-                    self.draw_line_between_blocks(last_x, last_y, grid_x, grid_y, self._current_block)
-                    self._last_drawn_block = (grid_x, grid_y)
+            # Use active tool if available
+            if self._active_tool and 0 <= grid_x < self._grid_width and 0 <= grid_y < self._grid_height:
+                self._active_tool.on_mouse_drag(self, grid_x, grid_y, "left")
             else:
-                # Fallback to regular drawing if no last position
-                self._handle_draw(local_x, local_y, "left")
-                self._last_drawn_block = (grid_x, grid_y)
+                # LINE INTERPOLATION: Draw line from last position to current position
+                if self._last_drawn_block != (-1, -1) and self._current_block:
+                    last_x, last_y = self._last_drawn_block
+                    
+                    # Only interpolate if we've moved to a different block
+                    if (grid_x, grid_y) != (last_x, last_y):
+                        # Draw interpolated line between last and current position
+                        self.draw_line_between_blocks(last_x, last_y, grid_x, grid_y, self._current_block)
+                        self._last_drawn_block = (grid_x, grid_y)
+                else:
+                    # Fallback to regular drawing if no last position
+                    self._handle_draw(local_x, local_y, "left")
+                    self._last_drawn_block = (grid_x, grid_y)
     
     def _handle_draw(self, x: float, y: float, button: str) -> None:
         """
