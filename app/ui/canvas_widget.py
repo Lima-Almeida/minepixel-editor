@@ -77,6 +77,10 @@ class CanvasWidget:
         self._current_hover_block: Tuple[int, int] = (-1, -1)
         self._last_rendered_hover_block: Tuple[int, int] = (-1, -1)  # Track last rendered hover
         
+        # LINE INTERPOLATION: Track last drawn position for continuous lines
+        self._last_drawn_block: Tuple[int, int] = (-1, -1)
+        self._drawing_blocks_cache: List[Tuple[int, int]] = []  # Blocks drawn in current stroke
+        
         # Grid overlay
         self._show_grid: bool = True
         self._grid_color: Tuple[int, int, int, int] = (100, 100, 100, 128)
@@ -117,6 +121,17 @@ class CanvasWidget:
         self._last_hover_render_time = 0.0
         self._hover_render_delay = 0.05  # 50ms = 20 FPS for hover updates (smooth enough)
         
+        # DEBOUNCED RENDERING: Accumulate changes and render in batches
+        self._pending_render = False
+        self._dirty_blocks: set = set()  # Set of (x, y) coordinates that need redraw
+        self._last_render_time = 0.0
+        self._render_delay = 0.016  # ~60 FPS max render rate (16ms)
+        self._batch_changes: List[Tuple[int, int, BlockTexture]] = []  # Pending block changes
+        
+        # RENDER SCHEDULER: Timer-based rendering
+        self._render_timer = None
+        self._max_batch_size = 100  # Max changes before forcing render
+        
         # Create drawlist
         self._create_canvas()
     
@@ -139,6 +154,18 @@ class CanvasWidget:
             dpg.add_item_hover_handler(callback=self._on_mouse_move)
         
         dpg.bind_item_handler_registry(self.tag, handlers)
+    
+    def stop_drawing(self) -> None:
+        """Stops drawing mode and finalizes the stroke with a full render.
+        Call this when mouse button is released.
+        """
+        if self._is_drawing:
+            self._is_drawing = False
+            self._last_drawn_block = (-1, -1)
+            
+            # Force a final full render to ensure everything is properly displayed
+            if self._dirty_blocks or self._pending_render:
+                self.render(force_full=True)
     
     def start_pan(self) -> None:
         """Starts panning mode. Call this when middle mouse button is pressed."""
@@ -256,7 +283,7 @@ class CanvasWidget:
             return self._grid[y][x]
         return None
     
-    def set_block_at(self, x: int, y: int, block: BlockTexture) -> None:
+    def set_block_at(self, x: int, y: int, block: BlockTexture, immediate_render: bool = False) -> None:
         """
         Sets a block at grid coordinates.
         
@@ -264,12 +291,26 @@ class CanvasWidget:
             x: Grid X coordinate
             y: Grid Y coordinate
             block: BlockTexture to place
+            immediate_render: If True, render immediately; if False, batch for later
         """
         if 0 <= y < self._grid_height and 0 <= x < self._grid_width:
+            # Check if block is actually different to avoid unnecessary updates
+            if self._grid[y][x].block_id == block.block_id:
+                return  # No change needed
+            
             self._grid[y][x] = block
+            
+            # Mark as dirty for partial rendering
+            self._dirty_blocks.add((x, y))
+            
             if self.on_block_changed:
                 self.on_block_changed(x, y, block)
-            self.render()
+            
+            # BATCH RENDERING: Accumulate changes instead of rendering immediately
+            if immediate_render:
+                self.render()
+            else:
+                self._schedule_render()
     
     # ========================================================================
     # Zoom and Pan
@@ -400,6 +441,72 @@ class CanvasWidget:
             callback: Function(canvas, x, y, button) called on mouse interaction
         """
         self._tool_callback = callback
+    
+    def _schedule_render(self) -> None:
+        """Schedules a render for the next frame, avoiding excessive renders."""
+        current_time = time.time()
+        
+        # If enough time has passed or too many changes accumulated, render now
+        if (current_time - self._last_render_time >= self._render_delay or 
+            len(self._dirty_blocks) >= self._max_batch_size):
+            self.render()
+        else:
+            # Mark that we need to render soon
+            self._pending_render = True
+    
+    def _bresenham_line(self, x0: int, y0: int, x1: int, y1: int) -> List[Tuple[int, int]]:
+        """Bresenham's line algorithm for smooth line interpolation.
+        
+        Returns all grid coordinates between (x0, y0) and (x1, y1).
+        This ensures continuous lines without gaps when drawing.
+        """
+        points = []
+        
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
+        
+        x, y = x0, y0
+        
+        while True:
+            points.append((x, y))
+            
+            if x == x1 and y == y1:
+                break
+            
+            e2 = 2 * err
+            
+            if e2 > -dy:
+                err -= dy
+                x += sx
+            
+            if e2 < dx:
+                err += dx
+                y += sy
+        
+        return points
+    
+    def draw_line_between_blocks(self, x0: int, y0: int, x1: int, y1: int, block: BlockTexture) -> None:
+        """Draws a continuous line of blocks between two points using Bresenham's algorithm.
+        
+        This prevents gaps when the mouse moves faster than the render rate.
+        """
+        points = self._bresenham_line(x0, y0, x1, y1)
+        
+        # Paint all points in the line
+        for x, y in points:
+            if 0 <= x < self._grid_width and 0 <= y < self._grid_height:
+                # Don't render each block individually - batch them all
+                if self._grid[y][x].block_id != block.block_id:
+                    self._grid[y][x] = block
+                    self._dirty_blocks.add((x, y))
+                    if self.on_block_changed:
+                        self.on_block_changed(x, y, block)
+        
+        # Schedule a single render for all changes
+        self._schedule_render()
     
     # ========================================================================
     # Coordinate Conversion
@@ -544,15 +651,34 @@ class CanvasWidget:
         self._texture_cache[block.block_id] = texture_tag
         return texture_tag
     
-    def render(self) -> None:
-        """Renders the grid on the Dear PyGui canvas with optimized viewport culling."""
+    def render(self, force_full: bool = False) -> None:
+        """Renders the grid on the Dear PyGui canvas with optimized viewport culling.
+        
+        Args:
+            force_full: If True, forces a full render even if dirty regions are available
+        """
         # Simple guard against recursion
         if self._is_rendering:
             return
         
         self._is_rendering = True
+        self._last_render_time = time.time()
+        self._pending_render = False
         
         try:
+            # OPTIMIZATION: Use dirty region rendering for small changes during drawing
+            # Only use dirty rendering when:
+            # 1. We have a small number of dirty blocks (< 50)
+            # 2. We're not being forced to do a full render
+            # 3. Grid exists and is not empty
+            use_dirty_render = (len(self._dirty_blocks) > 0 and 
+                              len(self._dirty_blocks) < 50 and 
+                              not force_full and 
+                              self._grid)
+            
+            if use_dirty_render:
+                self._render_dirty_blocks()
+                return
             # Clear only block drawings, keep grid and hover for selective update
             dpg.delete_item(self.tag, children_only=True)
             
@@ -682,12 +808,85 @@ class CanvasWidget:
             if self._show_grid and self._zoom_level >= 0.5:
                 self._draw_grid(start_x, start_y, end_x, end_y)
             
+            # Clear dirty blocks after full render
+            self._dirty_blocks.clear()
+            
         finally:
             self._is_rendering = False
         
         # SEPARATE LAYER: Update hover highlight independently
         # This prevents flickering since we don't clear the main canvas
         self._update_hover_layer()
+    
+    def _render_dirty_blocks(self) -> None:
+        """Renders only the blocks that have changed (dirty blocks).
+        
+        This is a MASSIVE performance optimization for painting operations.
+        Instead of redrawing the entire canvas, we only update changed blocks.
+        """
+        if not self._dirty_blocks or not dpg.does_item_exist(self.tag):
+            self._dirty_blocks.clear()
+            self._is_rendering = False
+            return
+        
+        try:
+            scaled_block_size = self._block_size * self._zoom_level
+            
+            # Pre-load textures for dirty blocks
+            unique_blocks = {}
+            for x, y in self._dirty_blocks:
+                if 0 <= y < self._grid_height and 0 <= x < self._grid_width:
+                    block = self._grid[y][x]
+                    if block.block_id not in unique_blocks:
+                        unique_blocks[block.block_id] = block
+                        # Ensure texture is loaded
+                        if block.block_id not in self._texture_cache:
+                            self._load_texture(block)
+            
+            # Draw each dirty block
+            for x, y in list(self._dirty_blocks):
+                if 0 <= y < self._grid_height and 0 <= x < self._grid_width:
+                    block = self._grid[y][x]
+                    
+                    # Calculate screen position
+                    screen_x = x * scaled_block_size + self._pan_x
+                    screen_y = y * scaled_block_size + self._pan_y
+                    
+                    # Check if block is visible on screen
+                    if (screen_x + scaled_block_size >= 0 and screen_x <= self.width and
+                        screen_y + scaled_block_size >= 0 and screen_y <= self.height):
+                        
+                        texture_tag = self._texture_cache.get(block.block_id)
+                        if texture_tag:
+                            # Draw the updated block
+                            dpg.draw_image(
+                                texture_tag,
+                                (screen_x, screen_y),
+                                (screen_x + scaled_block_size, screen_y + scaled_block_size),
+                                parent=self.tag
+                            )
+                            
+                            # Redraw grid lines for this block if grid is visible
+                            if self._show_grid and self._zoom_level >= 0.5:
+                                # Draw grid borders around this block
+                                dpg.draw_rectangle(
+                                    (screen_x, screen_y),
+                                    (screen_x + scaled_block_size, screen_y + scaled_block_size),
+                                    color=self._grid_color,
+                                    thickness=1,
+                                    fill=(0, 0, 0, 0),  # No fill, just border
+                                    parent=self.tag
+                                )
+            
+            # Clear dirty blocks after rendering
+            self._dirty_blocks.clear()
+            
+        except (SystemError, Exception) as e:
+            # Parent was deleted or error occurred, fall back to full render
+            self._dirty_blocks.clear()
+        
+        finally:
+            self._is_rendering = False
     
     def _draw_grid(self, start_x: int, start_y: int, end_x: int, end_y: int) -> None:
         """Draws the grid overlay with optimized calculations."""
@@ -816,8 +1015,13 @@ class CanvasWidget:
             return
         
         local_x, local_y = self._get_local_mouse_pos()
+        grid_x, grid_y = self.screen_to_grid(local_x, local_y)
         
+        # START NEW STROKE: Reset line interpolation tracking
         self._is_drawing = True
+        self._last_drawn_block = (grid_x, grid_y)
+        self._drawing_blocks_cache = []
+        
         self._handle_draw(local_x, local_y, "left")
     
     def _on_mouse_move(self, sender, app_data):
@@ -840,7 +1044,19 @@ class CanvasWidget:
         
         # Continue drawing ONLY if left mouse button is held (not middle or right)
         if dpg.is_mouse_button_down(dpg.mvMouseButton_Left) and not dpg.is_mouse_button_down(dpg.mvMouseButton_Middle):
-            self._handle_draw(local_x, local_y, "left")
+            # LINE INTERPOLATION: Draw line from last position to current position
+            if self._last_drawn_block != (-1, -1) and self._current_block:
+                last_x, last_y = self._last_drawn_block
+                
+                # Only interpolate if we've moved to a different block
+                if (grid_x, grid_y) != (last_x, last_y):
+                    # Draw interpolated line between last and current position
+                    self.draw_line_between_blocks(last_x, last_y, grid_x, grid_y, self._current_block)
+                    self._last_drawn_block = (grid_x, grid_y)
+            else:
+                # Fallback to regular drawing if no last position
+                self._handle_draw(local_x, local_y, "left")
+                self._last_drawn_block = (grid_x, grid_y)
     
     def _handle_draw(self, x: float, y: float, button: str) -> None:
         """
@@ -859,8 +1075,21 @@ class CanvasWidget:
                 # Use custom tool callback
                 self._tool_callback(self, grid_x, grid_y, button)
             elif button == "left" and self._current_block:
-                # Default: paint with current block
-                self.set_block_at(grid_x, grid_y, self._current_block)
+                # LINE INTERPOLATION: Draw from last position to current
+                if self._last_drawn_block != (-1, -1):
+                    last_x, last_y = self._last_drawn_block
+                    if (grid_x, grid_y) != (last_x, last_y):
+                        # Draw interpolated line
+                        self.draw_line_between_blocks(last_x, last_y, grid_x, grid_y, self._current_block)
+                    else:
+                        # Same block, just update it
+                        self.set_block_at(grid_x, grid_y, self._current_block, immediate_render=False)
+                else:
+                    # First block in stroke
+                    self.set_block_at(grid_x, grid_y, self._current_block, immediate_render=False)
+                
+                # Update tracking
+                self._last_drawn_block = (grid_x, grid_y)
     
     # ========================================================================
     # Utility Methods

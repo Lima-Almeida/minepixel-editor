@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Optional
+import time
 import dearpygui.dearpygui as dpg
 
 from app.ui.canvas_widget import CanvasWidget
@@ -139,6 +140,7 @@ class MinepixelEditorApp:
             dpg.add_mouse_wheel_handler(callback=self._on_mouse_scroll)
             dpg.add_mouse_down_handler(button=dpg.mvMouseButton_Middle, callback=self._on_pan_start)
             dpg.add_mouse_release_handler(button=dpg.mvMouseButton_Middle, callback=self._on_pan_stop)
+            dpg.add_mouse_release_handler(button=dpg.mvMouseButton_Left, callback=self._on_draw_stop)
             dpg.add_mouse_move_handler(callback=self._on_mouse_move)
     
     def _load_blocks(self):
@@ -278,6 +280,11 @@ class MinepixelEditorApp:
         if self.canvas:
             self.canvas.stop_pan()
     
+    def _on_draw_stop(self):
+        """Stop drawing mode and finalize stroke."""
+        if self.canvas:
+            self.canvas.stop_drawing()
+    
     def _on_mouse_move(self, sender, app_data):
         """Handle mouse move for panning."""
         if self.canvas and self.canvas._is_panning:
@@ -289,6 +296,12 @@ class MinepixelEditorApp:
         dpg.show_metrics()
         
         while dpg.is_dearpygui_running():
+            # Process pending renders from canvas
+            if self.canvas and self.canvas._pending_render:
+                current_time = time.time()
+                if current_time - self.canvas._last_render_time >= self.canvas._render_delay:
+                    self.canvas.render()
+            
             dpg.render_dearpygui_frame()
         
         dpg.destroy_context()
