@@ -192,6 +192,10 @@ class MinepixelEditorApp:
         if solid_blocks:
             self.canvas.set_current_block(solid_blocks[0])
         
+        # Connect callbacks
+        self.canvas.on_block_changed = self._on_block_changed
+        self.canvas.on_selection_changed = self._on_selection_changed
+        
         # Update sidebar
         self._update_sidebar_stats(grid)
     
@@ -227,6 +231,30 @@ class MinepixelEditorApp:
         """Toggle grid visibility."""
         if self.canvas:
             self.canvas.set_show_grid(not self.canvas.is_grid_visible())
+    
+    def _on_block_changed(self, x, y, block):
+        """Called when a block is changed (painted)."""
+        if not self.canvas:
+            return
+        
+        info = self.canvas.get_canvas_info()
+        dpg.set_value(self.status_text_tag,
+            f"Block changed at ({x}, {y}) -> {block.block_id} | "
+            f"Zoom: {info['zoom_level']:.1f}x | Grid: {info['grid_width']}x{info['grid_height']}")
+    
+    def _on_selection_changed(self, x, y):
+        """Called when hover position changes."""
+        if not self.canvas:
+            return
+        
+        if 0 <= x < self.canvas._grid_width and 0 <= y < self.canvas._grid_height:
+            block = self.canvas.get_block_at(x, y)
+            if block:
+                info = self.canvas.get_canvas_info()
+                dpg.set_value(self.status_text_tag,
+                    f"Hover: ({x}, {y}) -> {block.block_id} | "
+                    f"Zoom: {info['zoom_level']:.1f}x | "
+                    f"Left Click: Paint | Middle Click: Pan | Scroll: Zoom")
     
     # Mouse/Keyboard event handlers
     def _on_mouse_scroll(self, sender, app_data):
@@ -406,6 +434,10 @@ class MinepixelEditorApp:
                 solid = [b for b in self.block_manager.active_blocks if not b.has_transparency]
                 if solid:
                     self.canvas.set_current_block(solid[0])
+            
+            # Ensure callbacks are connected
+            self.canvas.on_block_changed = self._on_block_changed
+            self.canvas.on_selection_changed = self._on_selection_changed
             
             grid_height = len(block_grid)
             grid_width = len(block_grid[0]) if grid_height > 0 else 0
