@@ -77,8 +77,9 @@ class BrushTool(BaseTool):
             if 0 <= x < canvas._grid_width and 0 <= y < canvas._grid_height:
                 canvas.set_block_at(x, y, current_block, immediate_render=False)
         
-        # Schedule single render for all changes
-        canvas._schedule_render()
+        # Force immediate render during drag for responsive feedback
+        if canvas._dirty_blocks:
+            canvas.render()
     
     def on_mouse_down(self, canvas: CanvasWidget, grid_x: int, grid_y: int, button: str) -> None:
         """Paint on mouse down."""
@@ -97,16 +98,19 @@ class BrushTool(BaseTool):
             if self._last_painted_pos:
                 last_x, last_y = self._last_painted_pos
                 
-                # Get line between last and current position
-                points = canvas._bresenham_line(last_x, last_y, grid_x, grid_y)
-                
-                # Paint at each point along the line
-                for x, y in points:
-                    self._paint_at(canvas, x, y)
+                # Only interpolate if we moved to a different block
+                if (grid_x, grid_y) != (last_x, last_y):
+                    # Get line between last and current position
+                    points = canvas._bresenham_line(last_x, last_y, grid_x, grid_y)
+                    
+                    # Paint at each point along the line
+                    for x, y in points:
+                        self._paint_at(canvas, x, y)
+                    
+                    self._last_painted_pos = (grid_x, grid_y)
             else:
                 self._paint_at(canvas, grid_x, grid_y)
-            
-            self._last_painted_pos = (grid_x, grid_y)
+                self._last_painted_pos = (grid_x, grid_y)
     
     def on_mouse_up(self, canvas: CanvasWidget, grid_x: int, grid_y: int, button: str) -> None:
         """Finalize painting on mouse up."""
