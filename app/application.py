@@ -11,10 +11,13 @@ import time
 import dearpygui.dearpygui as dpg
 
 from app.ui.canvas_widget import CanvasWidget
+from app.ui.block_palette import BlockPaletteWidget
 from app.core.block_manager import BlockManager
 from app.core.exporter import Exporter
 from app.minecraft.image_mapper import ImageToBlockMapper
 from app.minecraft.texturepack.matcher import BlockMatcher
+from app.tools.brush_tool import BrushTool
+from app.tools.picker_tool import PickerTool
 
 
 class MinepixelEditorApp:
@@ -26,6 +29,12 @@ class MinepixelEditorApp:
         self.block_manager: Optional[BlockManager] = None
         self.matcher: Optional[BlockMatcher] = None
         self.exporter = Exporter()
+        self.block_palette: Optional[BlockPaletteWidget] = None
+        
+        # Tools
+        self.brush_tool = BrushTool()
+        self.picker_tool = PickerTool()
+        self.active_tool = None
         
         # Application state
         self.last_loaded_image: Optional[Path] = None
@@ -36,6 +45,9 @@ class MinepixelEditorApp:
         self.progress_bar_tag = "progress_bar"
         self.status_group_tag = "status_group"
         self.sidebar_tag = "sidebar_window"
+        self.left_panel_tag = "left_panel_window"
+        self.toolbar_tag = "toolbar"
+        self.tool_options_tag = "tool_options"
         self.block_stats_tag = "block_stats"
         self.settings_modal_tag = "settings_modal"
         self.settings_content_tag = "settings_content"
@@ -52,24 +64,20 @@ class MinepixelEditorApp:
         """Initialize Dear PyGui and setup UI."""
         dpg.create_context()
         
-        # Create main window
+        # Create main window with canvas taking full space
         with dpg.window(label="Minepixel Editor - Minecraft Pixel Art Generator", 
-                       tag="main_window", width=1200, height=850):
+                       tag="main_window", width=1860, height=850, pos=[10, 10]):
             
-            # Menu bar
-            self._create_menu_bar()
-            
-            # Canvas
-            self.canvas = CanvasWidget(tag="canvas", width=1180, height=750, parent="main_window")
-            
-            # Status bar with progress
-            with dpg.group(horizontal=True, tag=self.status_group_tag):
-                dpg.add_text("Loading textures...", tag=self.status_text_tag)
-                dpg.add_spacer(width=20)
-                dpg.add_progress_bar(tag=self.progress_bar_tag, default_value=0.0, 
-                                   width=200, show=False)
+            # Canvas - takes up almost all space (leaving room for footer)
+            self.canvas = CanvasWidget(tag="canvas", width=1840, height=800, parent="main_window")
         
-        # Create floating sidebar
+        # Create status bar/footer as floating window (always on top)
+        self._create_status_bar()
+        
+        # Create left panel as floating window over canvas
+        self._create_left_panel()
+        
+        # Create right sidebar as floating window over canvas
         self._create_sidebar()
         
         # Setup canvas handlers
@@ -84,14 +92,55 @@ class MinepixelEditorApp:
         # Setup global handlers
         self._setup_global_handlers()
         
+        # Setup tools
+        self._setup_tools()
+        
         # Create viewport
-        dpg.create_viewport(title="Minepixel Editor", width=1580, height=870)
+        dpg.create_viewport(title="Minepixel Editor", width=1880, height=900)
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("main_window", True)
         
-        # Position sidebar
-        dpg.set_item_pos(self.sidebar_tag, [1210, 25])
+        # Position floating panels
+        dpg.set_item_pos(self.left_panel_tag, [20, 20])
+        dpg.set_item_pos(self.sidebar_tag, [1490, 20])
+        dpg.set_item_pos("status_bar_window", [10, 820])
+        
+        # Ensure status bar is always on top
+        dpg.focus_item("status_bar_window")
+    
+    def _create_status_bar(self):
+        """Creates the status bar as a floating window always on top."""
+        with dpg.window(
+            label="Status",
+            tag="status_bar_window",
+            width=1860,
+            height=70,
+            no_title_bar=True,
+            no_move=True,
+            no_resize=True,
+            no_collapse=True,
+            no_close=True,
+            no_scrollbar=True
+        ):
+            with dpg.group(horizontal=True, tag=self.status_group_tag):
+                dpg.add_text("Loading textures...", tag=self.status_text_tag)
+                dpg.add_spacer(width=20)
+                dpg.add_progress_bar(
+                    tag=self.progress_bar_tag,
+                    default_value=0.0,
+                    width=200,
+                    show=False
+                )
+                dpg.add_spacer(width=20)
+                # Add menu buttons to status bar
+                dpg.add_button(label="Load Image", callback=self._open_file_dialog, height=25)
+                dpg.add_button(label="Export", callback=self._open_export_image_dialog, height=25)
+                dpg.add_button(label="Settings", callback=self._open_settings_modal, height=25)
+                dpg.add_button(label="Zoom +", callback=lambda: self.canvas.zoom_in(), height=25, width=60)
+                dpg.add_button(label="Zoom -", callback=lambda: self.canvas.zoom_out(), height=25, width=60)
+                dpg.add_button(label="Fit", callback=lambda: self.canvas.zoom_to_fit(), height=25, width=40)
+                dpg.add_button(label="Grid", callback=self._toggle_grid, height=25, width=40)
     
     def _create_menu_bar(self):
         """Creates the top menu bar with all controls."""
@@ -106,10 +155,17 @@ class MinepixelEditorApp:
             dpg.add_button(label="Toggle Grid", callback=self._toggle_grid)
     
     def _create_sidebar(self):
-        """Creates the floating sidebar with statistics."""
-        with dpg.window(label="Block Statistics", tag=self.sidebar_tag, 
-                       width=360, height=820,
-                       no_move=True, no_resize=False, no_collapse=True):
+        """Creates the right sidebar as a floating window over the canvas."""
+        with dpg.window(
+            label="Block Statistics",
+            tag=self.sidebar_tag,
+            width=360,
+            height=790,
+            no_move=False,
+            no_resize=True,
+            no_collapse=True,
+            no_close=True
+        ):
             dpg.add_text("Block Statistics")
             dpg.add_separator()
             dpg.add_text("Load an image to see statistics", tag="sidebar_placeholder")
@@ -122,6 +178,268 @@ class MinepixelEditorApp:
             dpg.add_separator()
             dpg.add_button(label="Export Block List to TXT", callback=self._open_export_dialog,
                          width=-1, height=30)
+    
+    def _create_left_panel(self):
+        """Creates the left panel as a floating window over the canvas."""
+        with dpg.window(
+            label="Tools",
+            tag=self.left_panel_tag,
+            width=290,
+            height=790,
+            no_move=False,
+            no_resize=True,
+            no_collapse=True,
+            no_close=True
+        ):
+            # Toolbar section
+            dpg.add_text("Toolbar", color=(200, 200, 255))
+            dpg.add_separator()
+            
+            with dpg.group(tag=self.toolbar_tag):
+                # Brush tool button
+                with dpg.group(horizontal=True):
+                    dpg.add_button(
+                        label="🖌️ Brush",
+                        tag="tool_brush_btn",
+                        width=130,
+                        height=40,
+                        callback=lambda: self._select_tool(self.brush_tool)
+                    )
+                    dpg.add_button(
+                        label="💧 Eyedropper",
+                        tag="tool_picker_btn",
+                        width=130,
+                        height=40,
+                        callback=lambda: self._select_tool(self.picker_tool)
+                    )
+            
+            dpg.add_separator()
+            
+            # Tool options section
+            dpg.add_text("Tool Options", color=(200, 200, 255))
+            dpg.add_separator()
+            
+            with dpg.group(tag=self.tool_options_tag):
+                dpg.add_text("Select a tool to see options")
+            
+            dpg.add_separator()
+            
+            # Selected block display (larger)
+            dpg.add_text("Selected Block", color=(200, 200, 255))
+            dpg.add_separator()
+            
+            with dpg.group(tag="selected_block_display"):
+                with dpg.group(horizontal=True, tag="selected_block_container"):
+                    # Texture will be added dynamically when a block is selected
+                    with dpg.group(tag="selected_texture_group"):
+                        pass
+                    with dpg.group():
+                        dpg.add_text("No block selected", tag="selected_block_name_large")
+                        dpg.add_text("", tag="selected_block_info", color=(150, 150, 150))
+            
+            dpg.add_separator()
+            
+            # Block palette section
+            dpg.add_text("Block Palette", color=(200, 200, 255))
+            dpg.add_separator()
+            
+            # Create block palette widget (reduced height)
+            self.block_palette = BlockPaletteWidget(
+                tag="block_palette",
+                width=270,
+                height=320,
+                parent=self.left_panel_tag
+            )
+    
+    def _setup_tools(self):
+        """Setup tools and their connections."""
+        # Set picker callback
+        self.picker_tool.set_on_block_picked(self._on_block_picked_by_picker)
+        
+        # Select brush tool by default
+        self._select_tool(self.brush_tool)
+        
+        # Connect block palette to canvas
+        if self.block_palette:
+            self.block_palette.set_on_block_selected(self._on_palette_block_selected)
+    
+    def _select_tool(self, tool):
+        """Selects a tool and updates UI."""
+        self.active_tool = tool
+        self.canvas.set_active_tool(tool)
+        
+        # Update tool option panel
+        self._update_tool_options()
+        
+        # Update button highlights
+        self._update_tool_button_highlights()
+        
+        # Update status
+        dpg.set_value(self.status_text_tag, f"Tool selected: {tool.name}")
+    
+    def _update_tool_options(self):
+        """Updates the tool options panel based on active tool."""
+        # Clear existing options
+        if dpg.does_item_exist(self.tool_options_tag):
+            dpg.delete_item(self.tool_options_tag, children_only=True)
+        
+        if isinstance(self.active_tool, BrushTool):
+            # Show brush size options
+            with dpg.group(parent=self.tool_options_tag):
+                dpg.add_text("Brush Size:")
+                
+                current_size = self.active_tool.get_brush_size()
+                
+                # Slider with odd values only (1, 3, 5, 7, 9, 11, 13, 15)
+                dpg.add_slider_int(
+                    label="Size",
+                    tag="brush_size_slider",
+                    default_value=current_size,
+                    min_value=1,
+                    max_value=15,
+                    callback=self._on_brush_size_changed,
+                    width=200,
+                    clamped=True
+                )
+                
+                dpg.add_text(f"Current: {current_size}x{current_size}", tag="brush_size_text")
+                
+                # Quick size buttons
+                dpg.add_text("Quick Select:")
+                with dpg.group(horizontal=True):
+                    for size in [1, 3, 5, 7, 9]:
+                        dpg.add_button(
+                            label=f"{size}x{size}",
+                            width=50,
+                            callback=lambda s, a, u: self._set_brush_size(u),
+                            user_data=size
+                        )
+        
+        elif isinstance(self.active_tool, PickerTool):
+            # Show picker info
+            with dpg.group(parent=self.tool_options_tag):
+                dpg.add_text("Click on canvas to pick a block")
+                dpg.add_text("The picked block will be selected")
+                dpg.add_text("in the palette.")
+    
+    def _update_tool_button_highlights(self):
+        """Updates tool button highlights."""
+        # Reset all buttons
+        if dpg.does_item_exist("tool_brush_btn"):
+            dpg.configure_item("tool_brush_btn", show=True)
+        if dpg.does_item_exist("tool_picker_btn"):
+            dpg.configure_item("tool_picker_btn", show=True)
+        
+        # Note: DPG doesn't have easy button highlighting
+        # In a more advanced implementation, could change button colors
+    
+    def _on_brush_size_changed(self, sender, value):
+        """Handles brush size slider change."""
+        if isinstance(self.active_tool, BrushTool):
+            # Ensure odd value
+            if value % 2 == 0:
+                value = value + 1 if value < 15 else value - 1
+            
+            self.active_tool.set_brush_size(value)
+            
+            # Update slider to odd value
+            if dpg.does_item_exist("brush_size_slider"):
+                dpg.set_value("brush_size_slider", value)
+            
+            if dpg.does_item_exist("brush_size_text"):
+                dpg.set_value("brush_size_text", f"Current: {value}x{value}")
+    
+    def _set_brush_size(self, size):
+        """Sets brush size from quick select buttons."""
+        if isinstance(self.active_tool, BrushTool):
+            self.active_tool.set_brush_size(size)
+            if dpg.does_item_exist("brush_size_slider"):
+                dpg.set_value("brush_size_slider", size)
+            if dpg.does_item_exist("brush_size_text"):
+                dpg.set_value("brush_size_text", f"Current: {size}x{size}")
+    
+    def _on_palette_block_selected(self, block):
+        """Handles block selection from palette."""
+        if self.canvas:
+            self.canvas.set_current_block(block)
+            self._update_selected_block_display(block)
+            dpg.set_value(self.status_text_tag, f"Block selected: {block.block_id}")
+    
+    def _on_block_picked_by_picker(self, block):
+        """Handles block picked by eyedropper tool."""
+        # Update palette selection
+        if self.block_palette:
+            self.block_palette.set_selected_block(block)
+        
+        self._update_selected_block_display(block)
+        dpg.set_value(self.status_text_tag, f"Block picked: {block.block_id}")
+    
+    def _update_selected_block_display(self, block):
+        """Updates the large selected block display."""
+        if not block:
+            dpg.set_value("selected_block_name_large", "No block selected")
+            dpg.set_value("selected_block_info", "")
+            # Remove texture if exists
+            if dpg.does_item_exist("selected_block_texture"):
+                dpg.delete_item("selected_block_texture")
+            return
+        
+        # Update text
+        dpg.set_value("selected_block_name_large", block.block_id)
+        
+        # Add info about transparency if applicable
+        info = "Solid block"
+        if hasattr(block, 'has_transparency') and block.has_transparency:
+            info = "Has transparency"
+        dpg.set_value("selected_block_info", info)
+        
+        # Update texture
+        texture_tag = f"selected_display_{block.block_id}"
+        
+        # Check if texture already exists
+        if not dpg.does_item_exist(texture_tag):
+            # Load and create texture
+            from PIL import Image
+            import numpy as np
+            
+            try:
+                if block.texture_path.exists():
+                    img = Image.open(block.texture_path).convert('RGBA')
+                    img = img.resize((48, 48), Image.NEAREST)
+                else:
+                    color = block.avg_color if block.avg_color else (255, 0, 255)
+                    img = Image.new('RGBA', (48, 48), (*color, 255))
+            except:
+                color = block.avg_color if block.avg_color else (255, 0, 255)
+                img = Image.new('RGBA', (48, 48), (*color, 255))
+            
+            # Convert to DPG format
+            texture_data = np.frombuffer(img.tobytes(), dtype=np.uint8)
+            texture_data = texture_data.reshape((img.height, img.width, 4))
+            texture_data = texture_data.astype(np.float32) / 255.0
+            
+            with dpg.texture_registry():
+                dpg.add_raw_texture(
+                    width=48,
+                    height=48,
+                    default_value=texture_data,
+                    format=dpg.mvFormat_Float_rgba,
+                    tag=texture_tag
+                )
+        
+        # Update or create image widget
+        if dpg.does_item_exist("selected_block_texture"):
+            dpg.configure_item("selected_block_texture", texture_tag=texture_tag)
+        else:
+            # Create image widget for the first time
+            if dpg.does_item_exist("selected_texture_group"):
+                dpg.add_image(
+                    texture_tag,
+                    tag="selected_block_texture",
+                    width=48,
+                    height=48,
+                    parent="selected_texture_group"
+                )
     
     def _setup_global_handlers(self):
         """Setup global keyboard and mouse handlers."""
@@ -151,6 +469,16 @@ class MinepixelEditorApp:
         
         # Initialize matcher
         self.matcher = BlockMatcher(self.block_manager.active_blocks)
+        
+        # Populate block palette
+        if self.block_palette:
+            self.block_palette.set_blocks(self.block_manager.active_blocks)
+            # Set first block as default if available
+            if self.block_manager.active_blocks:
+                first_block = self.block_manager.active_blocks[0]
+                self.block_palette.set_selected_block(first_block)
+                self.canvas.set_current_block(first_block)
+                self._update_selected_block_display(first_block)
         
         # Update status
         active_count = len(self.block_manager.active_blocks)
@@ -261,12 +589,22 @@ class MinepixelEditorApp:
     # Mouse/Keyboard event handlers
     def _on_mouse_scroll(self, sender, app_data):
         """Handle mouse scroll for zoom."""
-        if self.canvas and dpg.is_item_hovered("canvas"):
-            delta = app_data
-            if delta > 0:
-                self.canvas.zoom_in()
-            else:
-                self.canvas.zoom_out()
+        # Only zoom if mouse is NOT over floating panels
+        if self.canvas:
+            # Check if mouse is over any floating panel
+            if (dpg.is_item_hovered(self.left_panel_tag) or 
+                dpg.is_item_hovered(self.sidebar_tag) or
+                dpg.is_item_hovered("status_bar_window")):
+                # Let the default scroll behavior handle it for panels
+                return
+            
+            # Otherwise, handle zoom on canvas
+            if dpg.is_item_hovered("canvas"):
+                delta = app_data
+                if delta > 0:
+                    self.canvas.zoom_in()
+                else:
+                    self.canvas.zoom_out()
     
     def _on_pan_start(self):
         """Start pan mode."""
