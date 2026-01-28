@@ -2,6 +2,10 @@
 
 Image editor with the special functionality of converting any image into **Minecraft block pixel art**.
 
+## Usage
+
+Run main.py
+
 ## Features
 
 - Image conversion to pixel art using Minecraft blocks
