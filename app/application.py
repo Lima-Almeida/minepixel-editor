@@ -1,17 +1,18 @@
 """
-Main Application Module
-Manages the Dear PyGui application lifecycle and coordinates all components.
+Main Application Module - PySide6 version
+Manages the Qt application lifecycle and coordinates all components.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Optional
-import time
-import dearpygui.dearpygui as dpg
+from PIL import Image
 
-from app.ui.canvas_widget import CanvasWidget
-from app.ui.block_palette import BlockPaletteWidget
+from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QObject, Signal
+
+from app.ui.main_window import MainWindow
 from app.core.block_manager import BlockManager
 from app.core.exporter import Exporter
 from app.minecraft.image_mapper import ImageToBlockMapper
@@ -20,16 +21,22 @@ from app.tools.brush_tool import BrushTool
 from app.tools.picker_tool import PickerTool
 
 
-class MinepixelEditorApp:
-    """Main application class for Minepixel Editor."""
+class MinepixelEditorApp(QObject):
+    """Main application class for Minepixel Editor (PySide6 version)."""
+    
+    # Signals for async operations
+    loading_started = Signal()
+    loading_progress = Signal(int, int)  # current, total
+    loading_finished = Signal()
     
     def __init__(self):
+        super().__init__()
+        
         # Core components
-        self.canvas: Optional[CanvasWidget] = None
+        self.main_window: Optional[MainWindow] = None
         self.block_manager: Optional[BlockManager] = None
         self.matcher: Optional[BlockMatcher] = None
         self.exporter = Exporter()
-        self.block_palette: Optional[BlockPaletteWidget] = None
         
         # Tools
         self.brush_tool = BrushTool()
@@ -38,470 +45,78 @@ class MinepixelEditorApp:
         
         # Application state
         self.last_loaded_image: Optional[Path] = None
-        self._settings_initialized = False
-        
-        # UI tags
-        self.status_text_tag = "status_text"
-        self.progress_bar_tag = "progress_bar"
-        self.status_group_tag = "status_group"
-        self.sidebar_tag = "sidebar_window"
-        self.left_panel_tag = "left_panel_window"
-        self.toolbar_tag = "toolbar"
-        self.tool_options_tag = "tool_options"
-        self.block_stats_tag = "block_stats"
-        self.settings_modal_tag = "settings_modal"
-        self.settings_content_tag = "settings_content"
-        self.active_search_tag = "active_search_input"
-        self.ignored_search_tag = "ignored_search_input"
-        self.export_dialog_tag = "export_file_dialog"
-        self.export_image_dialog_tag = "export_image_dialog"
-        
-        # Lists for settings modal
-        self._active_blocks_list = []
-        self._ignored_blocks_list = []
-        
-        # Temporary data for image resize confirmation
-        self._pending_image_path = None
-        self._pending_resize_dimensions = None
-        
+    
     def setup(self):
-        """Initialize Dear PyGui and setup UI."""
-        dpg.create_context()
+        """Initialize Qt application and setup UI."""
+        # Create main window
+        self.main_window = MainWindow()
         
-        # Create main window with canvas taking full space
-        with dpg.window(label="Minepixel Editor - Minecraft Pixel Art Generator", 
-                       tag="main_window", width=1860, height=850, pos=[10, 10]):
-            
-            # Menu bar at the top
-            self._create_menu_bar()
-            
-            dpg.add_separator()
-            
-            # Canvas - takes up space between menu and footer
-            self.canvas = CanvasWidget(tag="canvas", width=1840, height=760, parent="main_window")
-        
-        # Create status bar/footer as floating window (always on top)
-        self._create_status_bar()
-        
-        # Create left panel as floating window over canvas
-        self._create_left_panel()
-        
-        # Create right sidebar as floating window over canvas
-        self._create_sidebar()
-        
-        # Setup canvas handlers
-        self.canvas.setup_handlers()
-        
-        # Load blocks
-        self._load_blocks()
-        
-        # Pre-load textures for modal
-        self._preload_textures()
-        
-        # Setup global handlers
-        self._setup_global_handlers()
+        # Connect signals
+        self._connect_signals()
         
         # Setup tools
         self._setup_tools()
         
-        # Create viewport
-        dpg.create_viewport(title="Minepixel Editor", width=1880, height=900)
-        dpg.setup_dearpygui()
-        dpg.show_viewport()
-        dpg.set_primary_window("main_window", True)
+        # Load blocks
+        self._load_blocks()
         
-        # Position floating panels
-        dpg.set_item_pos(self.left_panel_tag, [20, 80])
-        dpg.set_item_pos(self.sidebar_tag, [1490, 80])
-        dpg.set_item_pos("status_bar_window", [10, 820])
+        # Show window
+        self.main_window.show()
+        self.main_window.set_status("Ready")
+    
+    def _connect_signals(self):
+        """Connects signals between components."""
+        if not self.main_window:
+            return
         
-        # Ensure status bar is always on top
-        dpg.focus_item("status_bar_window")
-    
-    def _create_status_bar(self):
-        """Creates the status bar as a floating window always on top."""
-        with dpg.window(
-            label="Status",
-            tag="status_bar_window",
-            width=1860,
-            height=70,
-            no_title_bar=True,
-            no_move=True,
-            no_resize=True,
-            no_collapse=True,
-            no_close=True,
-            no_scrollbar=True
-        ):
-            with dpg.group(horizontal=True, tag=self.status_group_tag):
-                dpg.add_spacer(width=10)
-                dpg.add_text("Loading textures...", tag=self.status_text_tag)
-                dpg.add_spacer(width=20)
-                dpg.add_progress_bar(
-                    tag=self.progress_bar_tag,
-                    default_value=0.0,
-                    width=200,
-                    show=False
-                )
-    
-    def _create_header(self):
-        """Creates the header bar as a floating window always on top."""
-        with dpg.window(
-            label="Header",
-            tag="header_window",
-            width=1860,
-            height=50,
-            no_title_bar=True,
-            no_move=True,
-            no_resize=True,
-            no_collapse=True,
-            no_close=True,
-            no_scrollbar=True
-        ):
-            with dpg.group(horizontal=True):
-                dpg.add_spacer(width=10)
-                dpg.add_button(label="Load Image", callback=self._open_file_dialog, height=30)
-                dpg.add_button(label="Export", callback=self._open_export_image_dialog, height=30)
-                dpg.add_button(label="Settings", callback=self._open_settings_modal, height=30)
-                dpg.add_spacer(width=20)
-                dpg.add_button(label="Zoom +", callback=lambda: self.canvas.zoom_in(), height=30, width=70)
-                dpg.add_button(label="Zoom -", callback=lambda: self.canvas.zoom_out(), height=30, width=70)
-                dpg.add_button(label="Fit", callback=lambda: self.canvas.zoom_to_fit(), height=30, width=50)
-                dpg.add_button(label="Grid", callback=self._toggle_grid, height=30, width=50)
-    
-    def _create_menu_bar(self):
-        """Creates the top menu bar with all controls."""
-        with dpg.group(horizontal=True):
-            dpg.add_button(label="Load Image", callback=self._open_file_dialog)
-            dpg.add_button(label="Export", callback=self._open_export_image_dialog)
-            dpg.add_button(label="Settings", callback=self._open_settings_modal)
-            dpg.add_spacer(width=10)
-            dpg.add_button(label="Zoom +", callback=lambda: self.canvas.zoom_in())
-            dpg.add_button(label="Zoom -", callback=lambda: self.canvas.zoom_out())
-            dpg.add_button(label="Fit to Window", callback=lambda: self.canvas.zoom_to_fit())
-            dpg.add_button(label="Reset View", callback=lambda: self.canvas.reset_view())
-            dpg.add_button(label="Toggle Grid", callback=self._toggle_grid)
-    
-    def _create_sidebar(self):
-        """Creates the right sidebar as a floating window over the canvas."""
-        with dpg.window(
-            label="Block Statistics",
-            tag=self.sidebar_tag,
-            width=360,
-            height=720,
-            no_move=False,
-            no_resize=True,
-            no_collapse=True,
-            no_close=True,
-            no_scrollbar=True
-        ):
-            # Header (fixed)
-            dpg.add_text("Block Statistics")
-            dpg.add_separator()
-            dpg.add_text("Load an image to see statistics", tag="sidebar_placeholder")
-            
-            # Totals section (fixed, not scrollable)
-            with dpg.group(tag=f"{self.block_stats_tag}_totals"):
-                pass
-            
-            # Scrollable container for block stats list only
-            with dpg.child_window(
-                tag=f"{self.block_stats_tag}_scroll",
-                width=-1,
-                height=-60,  # Leave space for totals above and button below
-                border=True
-            ):
-                with dpg.group(tag=self.block_stats_tag):
-                    pass
-            
-            # Footer with export button (fixed at bottom)
-            dpg.add_separator()
-            dpg.add_button(label="Export Block List to TXT", callback=self._open_export_dialog,
-                         width=-1, height=30)
-    
-    def _create_left_panel(self):
-        """Creates the left panel as a floating window over the canvas."""
-        with dpg.window(
-            label="Tools",
-            tag=self.left_panel_tag,
-            width=290,
-            height=720,
-            no_move=False,
-            no_resize=True,
-            no_collapse=True,
-            no_close=True
-        ):
-            # Toolbar section
-            dpg.add_text("Toolbar", color=(200, 200, 255))
-            dpg.add_separator()
-            
-            with dpg.group(tag=self.toolbar_tag):
-                # Brush tool button
-                with dpg.group(horizontal=True):
-                    dpg.add_button(
-                        label="🖌️ Brush",
-                        tag="tool_brush_btn",
-                        width=130,
-                        height=40,
-                        callback=lambda: self._select_tool(self.brush_tool)
-                    )
-                    dpg.add_button(
-                        label="💧 Eyedropper",
-                        tag="tool_picker_btn",
-                        width=130,
-                        height=40,
-                        callback=lambda: self._select_tool(self.picker_tool)
-                    )
-            
-            dpg.add_separator()
-            
-            # Tool options section
-            dpg.add_text("Tool Options", color=(200, 200, 255))
-            dpg.add_separator()
-            
-            with dpg.group(tag=self.tool_options_tag):
-                dpg.add_text("Select a tool to see options")
-            
-            dpg.add_separator()
-            
-            # Selected block display (larger)
-            dpg.add_text("Selected Block", color=(200, 200, 255))
-            dpg.add_separator()
-            
-            with dpg.group(tag="selected_block_display"):
-                with dpg.group(horizontal=True, tag="selected_block_container"):
-                    # Texture will be added dynamically when a block is selected
-                    with dpg.group(tag="selected_texture_group"):
-                        pass
-                    with dpg.group():
-                        dpg.add_text("No block selected", tag="selected_block_name_large")
-                        dpg.add_text("", tag="selected_block_info", color=(150, 150, 150))
-            
-            dpg.add_separator()
-            
-            # Block palette section
-            dpg.add_text("Block Palette", color=(200, 200, 255))
-            dpg.add_separator()
-            
-            # Create block palette widget (reduced height)
-            self.block_palette = BlockPaletteWidget(
-                tag="block_palette",
-                width=270,
-                height=320,
-                parent=self.left_panel_tag
-            )
+        # Main window signals
+        self.main_window.load_image_requested.connect(self._on_load_image_requested)
+        self.main_window.export_requested.connect(self._on_export_requested)
+        self.main_window.export_block_list_requested.connect(self._on_export_block_list_requested)
+        self.main_window.settings_requested.connect(self._on_settings_requested)
+        self.main_window.brush_size_changed.connect(self._on_brush_size_changed)
+        
+        # Canvas signals
+        canvas = self.main_window.get_canvas()
+        canvas.block_changed.connect(self._on_block_changed)
+        canvas.selection_changed.connect(self._on_selection_changed)
     
     def _setup_tools(self):
         """Setup tools and their connections."""
         # Set picker callback
         self.picker_tool.set_on_block_picked(self._on_block_picked_by_picker)
         
+        # Connect tool buttons
+        if self.main_window:
+            self.main_window.brush_btn.clicked.connect(lambda: self._select_tool(self.brush_tool))
+            self.main_window.picker_btn.clicked.connect(lambda: self._select_tool(self.picker_tool))
+        
         # Select brush tool by default
         self._select_tool(self.brush_tool)
-        
-        # Connect block palette to canvas
-        if self.block_palette:
-            self.block_palette.set_on_block_selected(self._on_palette_block_selected)
     
     def _select_tool(self, tool):
         """Selects a tool and updates UI."""
         self.active_tool = tool
-        self.canvas.set_active_tool(tool)
-        
-        # Update tool option panel
-        self._update_tool_options()
-        
-        # Update button highlights
-        self._update_tool_button_highlights()
-        
-        # Update status
-        dpg.set_value(self.status_text_tag, f"Tool selected: {tool.name}")
-    
-    def _update_tool_options(self):
-        """Updates the tool options panel based on active tool."""
-        # Clear existing options
-        if dpg.does_item_exist(self.tool_options_tag):
-            dpg.delete_item(self.tool_options_tag, children_only=True)
-        
-        if isinstance(self.active_tool, BrushTool):
-            # Show brush size options
-            with dpg.group(parent=self.tool_options_tag):
-                dpg.add_text("Brush Size:")
-                
-                current_size = self.active_tool.get_brush_size()
-                
-                # Slider with odd values only (1, 3, 5, 7, 9, 11, 13, 15)
-                dpg.add_slider_int(
-                    label="Size",
-                    tag="brush_size_slider",
-                    default_value=current_size,
-                    min_value=1,
-                    max_value=15,
-                    callback=self._on_brush_size_changed,
-                    width=200,
-                    clamped=True
-                )
-                
-                dpg.add_text(f"Current: {current_size}x{current_size}", tag="brush_size_text")
-                
-                # Quick size buttons
-                dpg.add_text("Quick Select:")
-                with dpg.group(horizontal=True):
-                    for size in [1, 3, 5, 7, 9]:
-                        dpg.add_button(
-                            label=f"{size}x{size}",
-                            width=50,
-                            callback=lambda s, a, u: self._set_brush_size(u),
-                            user_data=size
-                        )
-        
-        elif isinstance(self.active_tool, PickerTool):
-            # Show picker info
-            with dpg.group(parent=self.tool_options_tag):
-                dpg.add_text("Click on canvas to pick a block")
-                dpg.add_text("The picked block will be selected")
-                dpg.add_text("in the palette.")
-    
-    def _update_tool_button_highlights(self):
-        """Updates tool button highlights."""
-        # Reset all buttons
-        if dpg.does_item_exist("tool_brush_btn"):
-            dpg.configure_item("tool_brush_btn", show=True)
-        if dpg.does_item_exist("tool_picker_btn"):
-            dpg.configure_item("tool_picker_btn", show=True)
-        
-        # Note: DPG doesn't have easy button highlighting
-        # In a more advanced implementation, could change button colors
-    
-    def _on_brush_size_changed(self, sender, value):
-        """Handles brush size slider change."""
-        if isinstance(self.active_tool, BrushTool):
-            # Ensure odd value
-            if value % 2 == 0:
-                value = value + 1 if value < 15 else value - 1
+        if self.main_window:
+            self.main_window.get_canvas().set_active_tool(tool)
             
-            self.active_tool.set_brush_size(value)
+            # Update button states
+            if tool == self.brush_tool:
+                self.main_window.brush_btn.setChecked(True)
+                self.main_window.picker_btn.setChecked(False)
+            elif tool == self.picker_tool:
+                self.main_window.brush_btn.setChecked(False)
+                self.main_window.picker_btn.setChecked(True)
             
-            # Update slider to odd value
-            if dpg.does_item_exist("brush_size_slider"):
-                dpg.set_value("brush_size_slider", value)
-            
-            if dpg.does_item_exist("brush_size_text"):
-                dpg.set_value("brush_size_text", f"Current: {value}x{value}")
-    
-    def _set_brush_size(self, size):
-        """Sets brush size from quick select buttons."""
-        if isinstance(self.active_tool, BrushTool):
-            self.active_tool.set_brush_size(size)
-            if dpg.does_item_exist("brush_size_slider"):
-                dpg.set_value("brush_size_slider", size)
-            if dpg.does_item_exist("brush_size_text"):
-                dpg.set_value("brush_size_text", f"Current: {size}x{size}")
-    
-    def _on_palette_block_selected(self, block):
-        """Handles block selection from palette."""
-        if self.canvas:
-            self.canvas.set_current_block(block)
-            self._update_selected_block_display(block)
-            dpg.set_value(self.status_text_tag, f"Block selected: {block.block_id}")
-    
-    def _on_block_picked_by_picker(self, block):
-        """Handles block picked by eyedropper tool."""
-        # Update palette selection
-        if self.block_palette:
-            self.block_palette.set_selected_block(block)
-        
-        self._update_selected_block_display(block)
-        dpg.set_value(self.status_text_tag, f"Block picked: {block.block_id}")
-    
-    def _update_selected_block_display(self, block):
-        """Updates the large selected block display."""
-        if not block:
-            dpg.set_value("selected_block_name_large", "No block selected")
-            dpg.set_value("selected_block_info", "")
-            # Remove texture if exists
-            if dpg.does_item_exist("selected_block_texture"):
-                dpg.delete_item("selected_block_texture")
-            return
-        
-        # Update text
-        dpg.set_value("selected_block_name_large", block.block_id)
-        
-        # Add info about transparency if applicable
-        info = "Solid block"
-        if hasattr(block, 'has_transparency') and block.has_transparency:
-            info = "Has transparency"
-        dpg.set_value("selected_block_info", info)
-        
-        # Update texture
-        texture_tag = f"selected_display_{block.block_id}"
-        
-        # Check if texture already exists
-        if not dpg.does_item_exist(texture_tag):
-            # Load and create texture
-            from PIL import Image
-            import numpy as np
-            
-            try:
-                if block.texture_path.exists():
-                    img = Image.open(block.texture_path).convert('RGBA')
-                    img = img.resize((48, 48), Image.NEAREST)
-                else:
-                    color = block.avg_color if block.avg_color else (255, 0, 255)
-                    img = Image.new('RGBA', (48, 48), (*color, 255))
-            except:
-                color = block.avg_color if block.avg_color else (255, 0, 255)
-                img = Image.new('RGBA', (48, 48), (*color, 255))
-            
-            # Convert to DPG format
-            texture_data = np.frombuffer(img.tobytes(), dtype=np.uint8)
-            texture_data = texture_data.reshape((img.height, img.width, 4))
-            texture_data = texture_data.astype(np.float32) / 255.0
-            
-            with dpg.texture_registry():
-                dpg.add_raw_texture(
-                    width=48,
-                    height=48,
-                    default_value=texture_data,
-                    format=dpg.mvFormat_Float_rgba,
-                    tag=texture_tag
-                )
-        
-        # Update or create image widget
-        if dpg.does_item_exist("selected_block_texture"):
-            dpg.configure_item("selected_block_texture", texture_tag=texture_tag)
-        else:
-            # Create image widget for the first time
-            if dpg.does_item_exist("selected_texture_group"):
-                dpg.add_image(
-                    texture_tag,
-                    tag="selected_block_texture",
-                    width=48,
-                    height=48,
-                    parent="selected_texture_group"
-                )
-    
-    def _setup_global_handlers(self):
-        """Setup global keyboard and mouse handlers."""
-        with dpg.handler_registry():
-            # Keyboard shortcuts
-            dpg.add_key_press_handler(ord('+'), callback=lambda: self.canvas.zoom_in())
-            dpg.add_key_press_handler(ord('='), callback=lambda: self.canvas.zoom_in())
-            dpg.add_key_press_handler(ord('-'), callback=lambda: self.canvas.zoom_out())
-            dpg.add_key_press_handler(ord('0'), callback=lambda: self.canvas.reset_view())
-            dpg.add_key_press_handler(ord('F'), callback=lambda: self.canvas.zoom_to_fit())
-            dpg.add_key_press_handler(ord('f'), callback=lambda: self.canvas.zoom_to_fit())
-            dpg.add_key_press_handler(ord('G'), callback=self._toggle_grid)
-            dpg.add_key_press_handler(ord('g'), callback=self._toggle_grid)
-            
-            # Mouse handlers
-            dpg.add_mouse_wheel_handler(callback=self._on_mouse_scroll)
-            dpg.add_mouse_down_handler(button=dpg.mvMouseButton_Middle, callback=self._on_pan_start)
-            dpg.add_mouse_release_handler(button=dpg.mvMouseButton_Middle, callback=self._on_pan_stop)
-            dpg.add_mouse_release_handler(button=dpg.mvMouseButton_Left, callback=self._on_draw_stop)
-            dpg.add_mouse_move_handler(callback=self._on_mouse_move)
+            self.main_window.set_status(f"Tool selected: {tool.name}")
     
     def _load_blocks(self):
         """Load and initialize blocks."""
+        if not self.main_window:
+            return
+        
+        self.main_window.set_status("Loading textures...")
+        
         texture_path = Path("assets/minecraft_textures/blocks")
         self.block_manager = BlockManager(texture_path)
         self.block_manager.load_blocks()
@@ -510,22 +125,21 @@ class MinepixelEditorApp:
         self.matcher = BlockMatcher(self.block_manager.active_blocks)
         
         # Populate block palette
-        if self.block_palette:
-            self.block_palette.set_blocks(self.block_manager.active_blocks)
-            # Set first block as default if available
-            if self.block_manager.active_blocks:
-                first_block = self.block_manager.active_blocks[0]
-                self.block_palette.set_selected_block(first_block)
-                self.canvas.set_current_block(first_block)
-                self._update_selected_block_display(first_block)
+        self.main_window.set_blocks(self.block_manager.active_blocks)
+        
+        # Set first block as default if available
+        if self.block_manager.active_blocks:
+            first_block = self.block_manager.active_blocks[0]
+            self.main_window.get_canvas().set_current_block(first_block)
         
         # Update status
         active_count = len(self.block_manager.active_blocks)
         total_count = len(self.block_manager.all_blocks)
         ignored_count = total_count - active_count
         
-        dpg.set_value(self.status_text_tag, 
-                     f"Loaded {total_count} textures ({active_count} active, {ignored_count} ignored)")
+        self.main_window.set_status(
+            f"Loaded {total_count} textures ({active_count} active, {ignored_count} ignored)"
+        )
         
         # Create test grid
         self._create_test_grid()
@@ -533,8 +147,8 @@ class MinepixelEditorApp:
     def _create_test_grid(self):
         """Creates a test grid with active blocks."""
         if not self.block_manager or not self.block_manager.active_blocks:
-            dpg.set_value(self.status_text_tag, 
-                        "ERROR: No active blocks available")
+            if self.main_window:
+                self.main_window.set_status("ERROR: No active blocks available")
             return
         
         # Get solid blocks
@@ -543,8 +157,8 @@ class MinepixelEditorApp:
             solid_blocks = self.block_manager.active_blocks
         
         # Create pattern grid
-        grid_width = 32
-        grid_height = 24
+        grid_width = 64
+        grid_height = 64
         
         grid = []
         for y in range(grid_height):
@@ -554,228 +168,27 @@ class MinepixelEditorApp:
                 row.append(solid_blocks[block_index])
             grid.append(row)
         
-        self.canvas.set_grid(grid)
-        self.canvas.zoom_to_fit()
-        
-        # Set current block for painting
-        if solid_blocks:
-            self.canvas.set_current_block(solid_blocks[0])
-        
-        # Connect callbacks
-        self.canvas.on_block_changed = self._on_block_changed
-        self.canvas.on_selection_changed = self._on_selection_changed
-        
-        # Update sidebar
-        self._update_sidebar_stats(grid)
-    
-    def _preload_textures(self):
-        """Pre-load block textures for modal performance."""
-        if not self.block_manager or not self.block_manager.all_blocks:
-            return
-        
-        from PIL import Image
-        import numpy as np
-        
-        print("[INFO] Pre-loading textures for modal...")
-        loaded = 0
-        
-        for block in self.block_manager.all_blocks:
-            texture_tag = f"mini_{block.block_id}"
-            if not dpg.does_item_exist(texture_tag) and block.texture_path.exists():
-                try:
-                    with Image.open(block.texture_path) as img:
-                        img = img.resize((16, 16), Image.NEAREST)
-                        img_array = np.array(img.convert('RGBA'), dtype=np.float32) / 255.0
-                        with dpg.texture_registry():
-                            dpg.add_static_texture(width=16, height=16, 
-                                                 default_value=img_array.flatten().tolist(),
-                                                 tag=texture_tag)
-                        loaded += 1
-                except Exception:
-                    pass
-        
-        print(f"[INFO] Pre-loaded {loaded} textures")
-    
-    def _toggle_grid(self):
-        """Toggle grid visibility."""
-        if self.canvas:
-            self.canvas.set_show_grid(not self.canvas.is_grid_visible())
-    
-    def _on_block_changed(self, x, y, block):
-        """Called when a block is changed (painted)."""
-        if not self.canvas:
-            return
-        
-        info = self.canvas.get_canvas_info()
-        dpg.set_value(self.status_text_tag,
-            f"Block changed at ({x}, {y}) -> {block.block_id} | "
-            f"Zoom: {info['zoom_level']:.1f}x | Grid: {info['grid_width']}x{info['grid_height']}")
-    
-    def _on_selection_changed(self, x, y):
-        """Called when hover position changes."""
-        if not self.canvas:
-            return
-        
-        if 0 <= x < self.canvas._grid_width and 0 <= y < self.canvas._grid_height:
-            block = self.canvas.get_block_at(x, y)
-            if block:
-                info = self.canvas.get_canvas_info()
-                dpg.set_value(self.status_text_tag,
-                    f"Hover: ({x}, {y}) -> {block.block_id} | "
-                    f"Zoom: {info['zoom_level']:.1f}x | "
-                    f"Left Click: Paint | Middle Click: Pan | Scroll: Zoom")
-    
-    # Mouse/Keyboard event handlers
-    def _on_mouse_scroll(self, sender, app_data):
-        """Handle mouse scroll for zoom."""
-        # Only zoom if mouse is NOT over floating panels
-        if self.canvas:
-            # Check if mouse is over any floating panel
-            if (dpg.is_item_hovered(self.left_panel_tag) or 
-                dpg.is_item_hovered(self.sidebar_tag) or
-                dpg.is_item_hovered("status_bar_window")):
-                # Let the default scroll behavior handle it for panels
-                return
+        if self.main_window:
+            self.main_window.set_grid(grid)
+            canvas = self.main_window.get_canvas()
+            canvas.zoom_to_fit()
             
-            # Otherwise, handle zoom on canvas
-            if dpg.is_item_hovered("canvas"):
-                delta = app_data
-                if delta > 0:
-                    self.canvas.zoom_in()
-                else:
-                    self.canvas.zoom_out()
-    
-    def _on_pan_start(self):
-        """Start pan mode."""
-        # Only start pan if mouse is over canvas
-        if self.canvas and dpg.is_item_hovered("canvas"):
-            if not self.canvas._is_panning:  # Prevent multiple calls
-                self.canvas.start_pan()
-    
-    def _on_pan_stop(self):
-        """Stop pan mode."""
-        if self.canvas:
-            self.canvas.stop_pan()
-    
-    def _on_draw_stop(self):
-        """Stop drawing mode and finalize stroke."""
-        if self.canvas:
-            self.canvas.stop_drawing()
-    
-    def _on_mouse_move(self, sender, app_data):
-        """Handle mouse move for panning."""
-        if self.canvas and self.canvas._is_panning:
-            # Verify middle button is still pressed
-            if dpg.is_mouse_button_down(dpg.mvMouseButton_Middle):
-                self.canvas.update_pan()
-                # Don't render during pan - only update position
-                # This eliminates flicker completely
-            else:
-                # Button was released but event wasn't caught - force stop
-                self.canvas.force_stop_pan()
-    
-    def run(self):
-        """Run the application main loop."""
-        dpg.show_metrics()
-        
-        while dpg.is_dearpygui_running():
-            # Update canvas during pan (smooth rendering in main loop at 60 FPS)
-            if self.canvas and self.canvas._is_panning:
-                current_time = time.time()
-                # Render at 60 FPS during pan for smooth visual feedback
-                if current_time - self.canvas._last_pan_render_time >= self.canvas._pan_render_delay:
-                    self.canvas._last_pan_render_time = current_time
-                    self.canvas.render()
+            # Set current block for painting
+            if solid_blocks:
+                canvas.set_current_block(solid_blocks[0])
             
-            # Process pending renders from canvas
-            elif self.canvas and self.canvas._pending_render:
-                current_time = time.time()
-                if current_time - self.canvas._last_render_time >= self.canvas._render_delay:
-                    self.canvas.render()
-            
-            dpg.render_dearpygui_frame()
-        
-        dpg.destroy_context()
+            self.main_window.set_status(f"Test grid created: {grid_width}x{grid_height}")
     
-    # File dialogs
-    def _open_file_dialog(self):
-        """Opens file dialog to load an image."""
-        with dpg.file_dialog(
-            directory_selector=False,
-            show=True,
-            callback=self._load_and_convert_image,
-            file_count=1,
-            width=700,
-            height=400,
-            default_path=str(Path.cwd())
-        ):
-            dpg.add_file_extension(".*")
-            dpg.add_file_extension(".png", color=(0, 255, 0, 255))
-            dpg.add_file_extension(".jpg", color=(255, 255, 0, 255))
-            dpg.add_file_extension(".jpeg", color=(255, 255, 0, 255))
-            dpg.add_file_extension(".bmp", color=(255, 128, 0, 255))
-            dpg.add_file_extension(".gif", color=(128, 0, 255, 255))
-    
-    def _open_export_dialog(self):
-        """Opens file dialog to export block list."""
-        block_stats = self.exporter.analyze_grid_blocks(
-            self.canvas._grid,
-            BlockManager.get_base_block_name,
-            BlockManager.get_block_variant
-        )
-        
-        if not block_stats:
-            dpg.set_value(self.status_text_tag, "No blocks to export. Load an image first.")
+    def _on_load_image_requested(self, file_path: str):
+        """Handles load image request."""
+        path = Path(file_path)
+        if not path.exists():
+            if self.main_window:
+                self.main_window.show_error("Error", f"File not found: {path}")
             return
         
-        # Store stats for export callback
-        self._pending_export_stats = block_stats
-        
-        # Create dialog if not exists
-        if not dpg.does_item_exist(self.export_dialog_tag):
-            with dpg.file_dialog(directory_selector=False, show=False, 
-                               callback=self._export_block_list,
-                               tag=self.export_dialog_tag,
-                               width=700, height=400,
-                               default_filename="block_list.txt"):
-                dpg.add_file_extension(".txt", color=(150, 255, 150, 255))
-        
-        dpg.show_item(self.export_dialog_tag)
-    
-    def _open_export_image_dialog(self):
-        """Opens file dialog to export canvas as image."""
-        if not self.canvas or not self.canvas._grid:
-            dpg.set_value(self.status_text_tag, "No image to export. Load an image first.")
-            return
-        
-        # Create dialog if not exists
-        if not dpg.does_item_exist(self.export_image_dialog_tag):
-            with dpg.file_dialog(directory_selector=False, show=False, 
-                               callback=self._export_canvas_image,
-                               tag=self.export_image_dialog_tag,
-                               width=700, height=400,
-                               default_filename="minecraft_pixelart.png"):
-                dpg.add_file_extension(".png", color=(150, 255, 150, 255))
-        
-        dpg.show_item(self.export_image_dialog_tag)
-    
-    def _load_and_convert_image(self, sender, app_data):
-        """Loads and converts selected image."""
-        selections = app_data.get('selections', {})
-        if not selections:
-            dpg.set_value(self.status_text_tag, "No file selected")
-            return
-        
-        file_path = Path(list(selections.values())[0])
-        if not file_path.exists():
-            dpg.set_value(self.status_text_tag, f"ERROR: File not found: {file_path}")
-            return
-        
-        # Check image size and show resize confirmation if needed
         try:
-            from PIL import Image
-            
-            with Image.open(file_path) as img:
+            with Image.open(path) as img:
                 width, height = img.size
             
             # Check if resize is needed (max 256x256)
@@ -788,192 +201,286 @@ class MinepixelEditorApp:
                 new_width = int(width * scale)
                 new_height = int(height * scale)
                 
-                # Store for later use
-                self._pending_image_path = file_path
-                self._pending_resize_dimensions = (new_width, new_height)
+                # Ask user for confirmation
+                if self.main_window:
+                    message = (
+                        f"The selected image exceeds the maximum size of 256x256 pixels.\n\n"
+                        f"Original size: {width}x{height} pixels\n"
+                        f"Will be resized to: {new_width}x{new_height} pixels\n\n"
+                        f"This ensures the final pixel art fits within Minecraft's "
+                        f"performance limits (256x256 blocks maximum).\n\n"
+                        f"Continue?"
+                    )
+                    
+                    if not self.main_window.ask_question("Image Resize Required", message):
+                        self.main_window.set_status("Image import cancelled")
+                        return
                 
-                # Show confirmation popup
-                self._show_resize_confirmation_popup(file_path, width, height, new_width, new_height)
+                target_size = (new_width, new_height)
             else:
-                # Load directly without resize
-                self.last_loaded_image = file_path
-                self._convert_and_load_image(file_path)
-                
-        except Exception as e:
-            dpg.set_value(self.status_text_tag, f"ERROR loading image: {e}")
-            return
-    
-    def _export_block_list(self, sender, app_data):
-        """Exports block list to TXT file."""
-        try:
-            file_path = Path(app_data['file_path_name'])
-            if file_path.suffix.lower() != '.txt':
-                file_path = file_path.with_suffix('.txt')
+                target_size = None
             
-            self.exporter.export_block_list(self._pending_export_stats, file_path)
-            dpg.set_value(self.status_text_tag, f"Exported block list to {file_path.name}")
-        except Exception as e:
-            dpg.set_value(self.status_text_tag, f"Export ERROR: {e}")
-    
-    def _export_canvas_image(self, sender, app_data):
-        """Exports canvas as PNG image."""
-        try:
-            file_path = Path(app_data['file_path_name'])
-            if file_path.suffix.lower() != '.png':
-                file_path = file_path.with_suffix('.png')
+            self.last_loaded_image = path
+            self._convert_and_load_image(path, target_size)
             
-            dpg.set_value(self.status_text_tag, f"Exporting image to {file_path.name}...")
-            self.exporter.export_image(self.canvas._grid, file_path)
-            dpg.set_value(self.status_text_tag, f"Exported image to {file_path.name}")
         except Exception as e:
-            dpg.set_value(self.status_text_tag, f"Export ERROR: {e}")
-    
-    def _show_resize_confirmation_popup(self, file_path: Path, orig_width: int, orig_height: int, 
-                                       new_width: int, new_height: int):
-        """Shows a popup to confirm image resize."""
-        popup_tag = "resize_confirmation_popup"
-        
-        # Delete existing popup if any
-        if dpg.does_item_exist(popup_tag):
-            dpg.delete_item(popup_tag)
-        
-        with dpg.window(
-            label="Image Resize Required",
-            tag=popup_tag,
-            modal=True,
-            show=True,
-            width=500,
-            height=250,
-            pos=[690, 325],
-            no_resize=True,
-            no_move=True
-        ):
-            dpg.add_text("The selected image exceeds the maximum size of 256x256 pixels.")
-            dpg.add_spacer(height=5)
-            dpg.add_text(f"Original size: {orig_width}x{orig_height} pixels")
-            dpg.add_text(f"Will be resized to: {new_width}x{new_height} pixels")
-            dpg.add_spacer(height=5)
-            dpg.add_text("This ensures the final pixel art fits within Minecraft's")
-            dpg.add_text("performance limits (256x256 blocks maximum).")
-            dpg.add_spacer(height=15)
-            
-            with dpg.group(horizontal=True):
-                dpg.add_spacer(width=120)
-                dpg.add_button(
-                    label="Accept and Import",
-                    callback=lambda: self._confirm_resize_and_load(popup_tag),
-                    width=130,
-                    height=30
-                )
-                dpg.add_spacer(width=10)
-                dpg.add_button(
-                    label="Cancel",
-                    callback=lambda: self._cancel_resize(popup_tag),
-                    width=80,
-                    height=30
-                )
-    
-    def _confirm_resize_and_load(self, popup_tag: str):
-        """Confirms resize and loads the image."""
-        # Close popup
-        if dpg.does_item_exist(popup_tag):
-            dpg.delete_item(popup_tag)
-        
-        # Load image with resize
-        self.last_loaded_image = self._pending_image_path
-        self._convert_and_load_image(self._pending_image_path, target_size=self._pending_resize_dimensions)
-    
-    def _cancel_resize(self, popup_tag: str):
-        """Cancels the resize operation."""
-        # Close popup
-        if dpg.does_item_exist(popup_tag):
-            dpg.delete_item(popup_tag)
-        
-        dpg.set_value(self.status_text_tag, "Image import cancelled")
+            if self.main_window:
+                self.main_window.show_error("Error", f"Error loading image: {e}")
     
     def _convert_and_load_image(self, file_path: Path, target_size=None):
         """Converts and loads image to canvas."""
+        if not self.main_window or not self.matcher:
+            return
+        
         try:
-            from PIL import Image
+            self.main_window.set_status(f"Loading image: {file_path.name}...")
+            self.main_window.show_progress(0, 100)
             
+            # Load image
             with Image.open(file_path) as img:
+                # Resize if needed
+                if target_size:
+                    img = img.resize(target_size, Image.Resampling.LANCZOS)
+                
+                # Convert to RGB
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
                 width, height = img.size
-            
-            # Use target_size if provided, otherwise use original
-            display_size = target_size if target_size else (width, height)
-            
-            dpg.set_value(self.status_text_tag, 
-                f"Converting {file_path.name} ({display_size[0]}x{display_size[1]}) to blocks...")
-            self._show_progress(0.0)
-            
-            # Convert image
-            mapper = ImageToBlockMapper(self.matcher)
-            
-            def update_progress(progress):
-                self._show_progress(progress)
-            
-            block_grid = mapper.map_image(file_path, target_size=target_size, progress_callback=update_progress)
-            
-            # Render
-            dpg.set_value(self.status_text_tag, f"Rendering {file_path.name}...")
-            self._show_progress(0.9)
-            
-            self.canvas.set_grid(block_grid)
-            self.canvas.render()
-            
-            self._show_progress(0.95)
-            self.canvas.zoom_to_fit()
-            self.canvas.render()
-            
-            # Update stats
-            self._update_sidebar_stats(block_grid)
-            
-            # Set current block
-            if self.block_manager.active_blocks:
-                solid = [b for b in self.block_manager.active_blocks if not b.has_transparency]
-                if solid:
-                    self.canvas.set_current_block(solid[0])
-            
-            # Ensure callbacks are connected
-            self.canvas.on_block_changed = self._on_block_changed
-            self.canvas.on_selection_changed = self._on_selection_changed
-            
-            grid_height = len(block_grid)
-            grid_width = len(block_grid[0]) if grid_height > 0 else 0
-            
-            self._show_progress(1.0)
-            dpg.set_value(self.status_text_tag,
-                f"Loaded {file_path.name} | Grid: {grid_width}x{grid_height} blocks | "
-                f"Original: {width}x{height} px")
-            
-            self._hide_progress()
+                
+                # Create mapper
+                mapper = ImageToBlockMapper(self.matcher)
+                
+                self.main_window.set_status(f"Converting {width}x{height} image to blocks...")
+                
+                # Progress callback
+                def progress_callback(progress):
+                    self.main_window.show_progress(int(progress * 100), 100, f"Rendering {file_path.name}...")
+                
+                # Convert to block grid
+                grid = mapper.map_image_to_blocks(img, progress_callback=progress_callback)
+                
+                self.main_window.set_status("Finalizing...")
+                self.main_window.show_progress(100, 100, f"Finalizing {file_path.name}...")
+                
+                # Set grid on canvas
+                self.main_window.set_grid(grid)
+                self.main_window.get_canvas().zoom_to_fit()
+                
+                # Update statistics
+                self._update_block_statistics(grid)
+                
+                self.main_window.hide_progress()
+                self.main_window.set_status(
+                    f"Loaded {file_path.name} ({width}x{height})"
+                )
             
         except Exception as e:
-            dpg.set_value(self.status_text_tag, f"ERROR: {e}")
-            self._hide_progress()
-            import traceback
-            traceback.print_exc()
+            self.main_window.show_error("Error", f"Error converting image: {e}")
+            self.main_window.set_status("Error converting image")
     
-    def _show_progress(self, progress: float):
-        """Shows and updates progress bar."""
-        if dpg.does_item_exist(self.progress_bar_tag):
-            dpg.set_value(self.progress_bar_tag, progress)
-            dpg.show_item(self.progress_bar_tag)
-    
-    def _hide_progress(self):
-        """Hides progress bar."""
-        if dpg.does_item_exist(self.progress_bar_tag):
-            dpg.hide_item(self.progress_bar_tag)
-    
-    def _update_sidebar_stats(self, grid):
-        """Updates sidebar with block statistics."""
-        # Clear previous stats from both containers
-        if dpg.does_item_exist(self.block_stats_tag):
-            dpg.delete_item(self.block_stats_tag, children_only=True)
-        if dpg.does_item_exist(f"{self.block_stats_tag}_totals"):
-            dpg.delete_item(f"{self.block_stats_tag}_totals", children_only=True)
+    def _on_export_requested(self):
+        """Handles export request."""
+        if not self.main_window:
+            return
         
-        # Analyze
+        canvas = self.main_window.get_canvas()
+        if not canvas._grid:
+            self.main_window.show_warning("Warning", "No image to export. Load an image first.")
+            return
+        
+        from PySide6.QtWidgets import QFileDialog
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.main_window,
+            "Export Image",
+            "",
+            "PNG Images (*.png)"
+        )
+        
+        if file_path:
+            try:
+                path = Path(file_path)
+                if path.suffix.lower() != '.png':
+                    path = path.with_suffix('.png')
+                
+                self.main_window.set_status(f"Exporting image to {path.name}...")
+                self.exporter.export_image(canvas._grid, path)
+                self.main_window.set_status(f"Exported image to {path.name}")
+                self.main_window.show_info("Success", f"Image exported to {path.name}")
+            except Exception as e:
+                self.main_window.show_error("Error", f"Export error: {e}")
+    
+    def _on_export_block_list_requested(self, file_path: Path):
+        """Handles export block list request."""
+        if not self.main_window:
+            return
+        
+        canvas = self.main_window.get_canvas()
+        if not canvas or not canvas._grid:
+            self.main_window.show_error("Export Error", "No grid to export. Load an image first.")
+            return
+        
+        try:
+            from app.core.block_manager import BlockManager
+            
+            # Analyze grid with variants
+            block_stats = self.exporter.analyze_grid_blocks(
+                canvas._grid,
+                BlockManager.get_base_block_name,
+                BlockManager.get_block_variant
+            )
+            
+            # Export to file
+            self.exporter.export_block_list(block_stats, file_path)
+            self.main_window.set_status(f"Block list exported to {file_path.name}")
+            self.main_window.show_info("Export Success", f"Block list exported to:\\n{file_path}")
+        except Exception as e:
+            self.main_window.show_error("Export Error", f"Failed to export block list: {e}")
+    
+    def _on_settings_requested(self):
+        """Handles settings request."""
+        if self.main_window and self.block_manager:
+            from app.ui.dialogs.settings_dialog import SettingsDialog
+            
+            dialog = SettingsDialog(self.block_manager, self.main_window)
+            dialog.settings_changed.connect(self._on_settings_changed)
+            dialog.re_render_requested.connect(self._on_re_render_requested)
+            dialog.exec()
+    
+    def _on_settings_changed(self):
+        """Handles settings change - update palette with new active blocks."""
+        if self.main_window and self.block_manager:
+            self.main_window.set_blocks(self.block_manager.active_blocks)
+            self.main_window.set_status(
+                f"Settings updated - {len(self.block_manager.active_blocks)} active blocks"
+            )
+    
+    def _on_re_render_requested(self):
+        """Handles re-render request after settings change."""
+        if not self.main_window:
+            return
+        
+        canvas = self.main_window.get_canvas()
+        if not canvas or not canvas._grid:
+            return
+        
+        try:
+            # Get current grid dimensions
+            height = len(canvas._grid)
+            width = len(canvas._grid[0]) if height > 0 else 0
+            
+            if width == 0 or height == 0:
+                return
+            
+            # Convert grid back to image, then re-convert with new blocks
+            # Create a temporary image from current colors
+            from PIL import Image
+            import numpy as np
+            
+            # Extract colors from current grid
+            img_array = np.zeros((height, width, 3), dtype=np.uint8)
+            for y in range(height):
+                for x in range(width):
+                    block = canvas._grid[y][x]
+                    if block and block.avg_color:
+                        img_array[y, x] = block.avg_color[:3]
+            
+            img = Image.fromarray(img_array, 'RGB')
+            
+            # Show progress
+            self.main_window.show_progress(0, 100, "Re-rendering with new blocks...")
+            
+            # Re-map with new blocks
+            from app.minecraft.image_mapper import ImageToBlockMapper
+            mapper = ImageToBlockMapper(self.block_manager.matcher)
+            
+            def progress_callback(progress: float):
+                progress_percent = int(progress * 100)
+                self.main_window.show_progress(progress_percent, 100, "Re-rendering...")
+                from PySide6.QtWidgets import QApplication
+                QApplication.processEvents()
+            
+            new_grid = mapper.map_image_to_blocks(img, progress_callback=progress_callback)
+            
+            # Update canvas
+            self.main_window.show_progress(100, 100, "Finalizing...")
+            self.main_window.set_grid(new_grid)
+            
+            # Update statistics
+            self._update_block_statistics(new_grid)
+            
+            self.main_window.hide_progress()
+            self.main_window.set_status("Image re-rendered with new block list")
+            
+        except Exception as e:
+            self.main_window.hide_progress()
+            self.main_window.show_error("Re-render Error", f"Failed to re-render image: {e}")
+            self.main_window.set_status("Re-render failed")
+    
+    def _on_brush_size_changed(self, size: int):
+        """Handles brush size change."""
+        if self.brush_tool:
+            self.brush_tool.set_brush_size(size)
+            self.main_window.set_status(f"Brush size: {size}x{size}")
+    
+    def _on_block_changed(self, x: int, y: int, block):
+        """Called when a block is changed (painted)."""
+        if not self.main_window:
+            return
+        
+        canvas = self.main_window.get_canvas()
+        info = canvas.get_canvas_info()
+        
+        self.main_window.set_status(
+            f"Block changed at ({x}, {y}) -> {block.block_id} | "
+            f"Zoom: {info['zoom_level']:.1f}x | Grid: {info['grid_width']}x{info['grid_height']}"
+        )
+    
+    def _on_selection_changed(self, x: int, y: int):
+        """Called when hover position changes."""
+        if not self.main_window:
+            return
+        
+        canvas = self.main_window.get_canvas()
+        
+        if 0 <= x < canvas._grid_width and 0 <= y < canvas._grid_height:
+            block = canvas.get_block_at(x, y)
+            if block:
+                info = canvas.get_canvas_info()
+                self.main_window.set_status(
+                    f"Position: ({x}, {y}) -> {block.block_id} | "
+                    f"Zoom: {info['zoom_level']:.1f}x | "
+                    f"Left: Paint | Middle: Pan | Scroll: Zoom"
+                )
+    
+    def _on_block_picked_by_picker(self, block):
+        """Handles block picked by eyedropper tool."""
+        if self.main_window:
+            # Update palette selection
+            self.main_window.block_palette.set_selected_block(block)
+            self.main_window._selected_block = block
+            self.main_window.canvas.set_current_block(block)
+            self.main_window._update_selected_block_display()
+            self.main_window.set_status(f"Block picked: {block.block_id}")
+    
+    def _update_block_statistics(self, grid: List[List]):
+        """Updates block statistics display."""
+        if not self.main_window or not grid:
+            return
+        
+        from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QPushButton, QWidget, QFrame, QLabel
+        from PySide6.QtGui import QPixmap
+        from PySide6.QtCore import Qt
+        from app.core.block_manager import BlockManager
+        
+        # Clear previous widgets
+        while self.main_window.stats_layout.count():
+            item = self.main_window.stats_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Analyze grid with variants
         block_stats = self.exporter.analyze_grid_blocks(
             grid,
             BlockManager.get_base_block_name,
@@ -981,72 +488,118 @@ class MinepixelEditorApp:
         )
         
         if not block_stats:
-            dpg.add_text("No blocks in grid", parent=self.block_stats_tag)
+            self.main_window.totals_label.setText("No blocks in grid")
             return
         
+        # Calculate totals
         total_blocks = sum(stats['total'] for stats in block_stats.values())
+        unique_types = len(block_stats)
         
-        # Hide placeholder
-        if dpg.does_item_exist("sidebar_placeholder"):
-            dpg.hide_item("sidebar_placeholder")
-        
-        # Add totals to the fixed section (not scrollable)
-        dpg.add_text(f"Total Blocks: {total_blocks:,}", parent=f"{self.block_stats_tag}_totals")
-        dpg.add_text(f"Unique Types: {len(block_stats)}", parent=f"{self.block_stats_tag}_totals")
-        dpg.add_separator(parent=f"{self.block_stats_tag}_totals")
+        # Update totals
+        self.main_window.totals_label.setText(
+            f"<b>Total Blocks:</b> {total_blocks:,}<br>"
+            f"<b>Unique Types:</b> {unique_types}"
+        )
         
         # Sort by count
         sorted_blocks = sorted(block_stats.items(), key=lambda x: x[1]['total'], reverse=True)
         
-        # Add blocks to scrollable list
+        # Add all blocks with images and dropdowns
         for base_name, stats in sorted_blocks:
             display_block = stats['blocks'].get('normal') or next(iter(stats['blocks'].values()))
             has_variants = len(stats['variants']) > 1
             
+            # Create block entry
+            block_frame = QFrame()
+            block_frame.setFrameShape(QFrame.Shape.StyledPanel)
+            block_layout = QVBoxLayout(block_frame)
+            block_layout.setContentsMargins(5, 5, 5, 5)
+            block_layout.setSpacing(3)
+            
+            # Header with image and name
+            header_widget = QWidget()
+            header_layout = QHBoxLayout(header_widget)
+            header_layout.setContentsMargins(0, 0, 0, 0)
+            header_layout.setSpacing(8)
+            
+            # Add texture image
+            if display_block and display_block.texture_path.exists():
+                try:
+                    texture_label = QLabel()
+                    pixmap = QPixmap(str(display_block.texture_path))
+                    if not pixmap.isNull():
+                        scaled_pixmap = pixmap.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation)
+                        texture_label.setPixmap(scaled_pixmap)
+                        header_layout.addWidget(texture_label)
+                except Exception:
+                    pass
+            
+            # Add name and count
+            # Remove 'minecraft:' prefix for cleaner display
+            display_name = base_name.replace('minecraft:', '')
+            name_label = QLabel(f"<b>{display_name}:</b> {stats['total']} blocks")
+            header_layout.addWidget(name_label, stretch=1)
+            block_layout.addWidget(header_widget)
+            
+            # Add variants dropdown if multiple
             if has_variants:
-                with dpg.group(horizontal=True, parent=self.block_stats_tag):
-                    if display_block and display_block.texture_path.exists():
-                        self._add_mini_texture(display_block)
+                # Create collapsible section
+                variants_btn = QPushButton(f"▶ {len(stats['variants'])} variants")
+                variants_btn.setFlat(True)
+                variants_btn.setStyleSheet("text-align: left; padding: 2px;")
+                
+                # Variants container
+                variants_widget = QWidget()
+                variants_layout = QVBoxLayout(variants_widget)
+                variants_layout.setContentsMargins(20, 0, 0, 0)
+                variants_layout.setSpacing(2)
+                variants_widget.setVisible(False)
+                
+                # Add each variant
+                for variant, count in sorted(stats['variants'].items(), key=lambda x: x[1], reverse=True):
+                    variant_block = stats['blocks'].get(variant)
+                    variant_widget = QWidget()
+                    variant_layout = QHBoxLayout(variant_widget)
+                    variant_layout.setContentsMargins(0, 0, 0, 0)
+                    variant_layout.setSpacing(8)
                     
-                    with dpg.collapsing_header(label=f"{base_name}: {stats['total']} blocks",
-                                              default_open=False):
-                        for variant, count in sorted(stats['variants'].items()):
-                            variant_block = stats['blocks'].get(variant)
-                            if variant_block:
-                                with dpg.group(horizontal=True):
-                                    dpg.add_text(f"  • {variant.capitalize()}: {count}")
-                                    if variant_block.texture_path.exists():
-                                        self._add_mini_texture(variant_block)
-            else:
-                with dpg.group(horizontal=True, parent=self.block_stats_tag):
-                    if display_block and display_block.texture_path.exists():
-                        self._add_mini_texture(display_block)
-                    dpg.add_text(f"{base_name}: {stats['total']}")
+                    # Variant texture
+                    if variant_block and variant_block.texture_path.exists():
+                        try:
+                            var_texture_label = QLabel()
+                            var_pixmap = QPixmap(str(variant_block.texture_path))
+                            if not var_pixmap.isNull():
+                                var_scaled = var_pixmap.scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation)
+                                var_texture_label.setPixmap(var_scaled)
+                                variant_layout.addWidget(var_texture_label)
+                        except Exception:
+                            pass
+                    
+                    var_label = QLabel(f"{variant.capitalize()}: {count}")
+                    variant_layout.addWidget(var_label, stretch=1)
+                    variants_layout.addWidget(variant_widget)
+                
+                # Toggle function
+                def make_toggle(btn, widget):
+                    def toggle():
+                        visible = not widget.isVisible()
+                        widget.setVisible(visible)
+                        btn.setText(("▼" if visible else "▶") + btn.text()[1:])
+                    return toggle
+                
+                variants_btn.clicked.connect(make_toggle(variants_btn, variants_widget))
+                block_layout.addWidget(variants_btn)
+                block_layout.addWidget(variants_widget)
             
-            dpg.add_spacer(height=4, parent=self.block_stats_tag)
+            self.main_window.stats_layout.addWidget(block_frame)
+        
+        # Add stretch at the end
+        self.main_window.stats_layout.addStretch()
+
     
-    def _add_mini_texture(self, block):
-        """Adds mini texture preview."""
-        texture_tag = f"mini_{block.block_id}"
-        if dpg.does_item_exist(texture_tag):
-            dpg.add_image(texture_tag)
-        else:
-            from PIL import Image
-            import numpy as np
-            
-            try:
-                with Image.open(block.texture_path) as img:
-                    img = img.resize((16, 16), Image.NEAREST)
-                    img_array = np.array(img.convert('RGBA'), dtype=np.float32) / 255.0
-                    with dpg.texture_registry():
-                        dpg.add_static_texture(width=16, height=16, 
-                                             default_value=img_array.flatten().tolist(),
-                                             tag=texture_tag)
-                    dpg.add_image(texture_tag)
-            except Exception:
-                pass
-    
-    def _open_settings_modal(self):
-        """Opens settings modal for block management."""
-        # Implementation will be added later (complex UI)
-        dpg.set_value(self.status_text_tag, "Settings modal coming soon...")
+    def run(self):
+        """Run the application main loop."""
+        if not self.main_window:
+            return 1
+        
+        return QApplication.instance().exec()

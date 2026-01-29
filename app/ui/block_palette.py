@@ -1,96 +1,88 @@
 """
-Block Palette Widget - Visual block selector.
+Block Palette Widget - PySide6 version.
+Visual block selector with search and thumbnails.
 """
 
 from __future__ import annotations
-from typing import List, Optional, Callable
+from typing import List, Optional
 from pathlib import Path
-import dearpygui.dearpygui as dpg
+
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+    QLineEdit, QScrollArea, QPushButton, QGridLayout
+)
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QPixmap, QImage, QColor
 from PIL import Image
-import numpy as np
 
 from app.minecraft.texturepack.models import BlockTexture
 
 
-class BlockPaletteWidget:
-    """Visual palette for selecting blocks."""
+class BlockPalette(QWidget):
+    """Visual palette for selecting blocks (PySide6 version)."""
     
-    def __init__(self, tag: str, width: int = 280, height: int = 300, parent=None):
-        """
-        Initialize block palette widget.
-        
-        Args:
-            tag: Unique tag for the widget
-            width: Palette width
-            height: Palette height
-            parent: Parent container
-        """
-        self.tag = tag
-        self.width = width
-        self.height = height
-        self.parent = parent
+    # Signals
+    block_selected = Signal(object)  # Emits BlockTexture
+    
+    def __init__(self, width: int = 280, height: int = 400):
+        super().__init__()
         
         self._blocks: List[BlockTexture] = []
         self._selected_block: Optional[BlockTexture] = None
-        self._texture_cache: dict[str, str] = {}
-        self._on_block_selected: Optional[Callable] = None
+        self._texture_cache: dict[str, QPixmap] = {}
+        self._search_filter: str = ""
+        self._block_buttons: List[QPushButton] = []
         
-        # UI state
-        self._search_filter = ""
-        self._block_buttons = []
+        self.setMinimumSize(width, height)
+        self.setMaximumWidth(width + 50)
         
-        # Create widget
-        self._create_palette()
+        self._create_ui()
     
-    def _create_palette(self) -> None:
+    def _create_ui(self):
         """Creates the palette UI."""
-        with dpg.group(tag=self.tag, parent=self.parent):
-            # Search filter
-            dpg.add_text("Block Palette:")
-            dpg.add_input_text(
-                tag=f"{self.tag}_search",
-                hint="Search blocks...",
-                callback=self._on_search_changed,
-                width=-1
-            )
-            dpg.add_separator()
-            
-            # Selected block display
-            with dpg.group(tag=f"{self.tag}_selected_display", horizontal=True):
-                dpg.add_text("Selected: ")
-                dpg.add_text("None", tag=f"{self.tag}_selected_name")
-            
-            dpg.add_separator()
-            
-            # Scrollable block list
-            with dpg.child_window(
-                tag=f"{self.tag}_scroll",
-                width=-1,
-                height=self.height,
-                border=True,
-                horizontal_scrollbar=False,
-                autosize_x=True
-            ):
-                dpg.add_group(tag=f"{self.tag}_blocks")
-    
-    def set_blocks(self, blocks: List[BlockTexture]) -> None:
-        """
-        Sets the available blocks.
+        layout = QVBoxLayout(self)
         
-        Args:
-            blocks: List of BlockTexture objects
-        """
+        # Search filter
+        search_label = QLabel("Search:")
+        layout.addWidget(search_label)
+        
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Type to filter blocks...")
+        self.search_input.textChanged.connect(self._on_search_changed)
+        layout.addWidget(self.search_input)
+        
+        # Selected block display
+        selected_layout = QHBoxLayout()
+        selected_layout.addWidget(QLabel("Selected:"))
+        self.selected_label = QLabel("None")
+        self.selected_label.setWordWrap(True)
+        selected_layout.addWidget(self.selected_label)
+        selected_layout.addStretch()
+        layout.addLayout(selected_layout)
+        
+        # Scrollable block list
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.blocks_widget = QWidget()
+        self.blocks_layout = QVBoxLayout(self.blocks_widget)
+        self.blocks_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.blocks_layout.setSpacing(2)
+        
+        scroll_area.setWidget(self.blocks_widget)
+        layout.addWidget(scroll_area)
+        
+        self.setLayout(layout)
+    
+    def set_blocks(self, blocks: List[BlockTexture]):
+        """Sets the available blocks."""
         self._blocks = blocks
         self._load_textures()
         self._update_block_list()
     
-    def set_selected_block(self, block: Optional[BlockTexture]) -> None:
-        """
-        Sets the currently selected block.
-        
-        Args:
-            block: BlockTexture to select
-        """
+    def set_selected_block(self, block: Optional[BlockTexture]):
+        """Sets the currently selected block."""
         self._selected_block = block
         self._update_selected_display()
         self._update_button_highlights()
@@ -99,71 +91,52 @@ class BlockPaletteWidget:
         """Returns the currently selected block."""
         return self._selected_block
     
-    def set_on_block_selected(self, callback: Callable) -> None:
-        """
-        Sets callback for block selection.
-        
-        Args:
-            callback: Function(block) called when block is selected
-        """
-        self._on_block_selected = callback
-    
-    def _on_search_changed(self, sender, value):
+    def _on_search_changed(self, text: str):
         """Handles search filter changes."""
-        self._search_filter = value.lower()
+        self._search_filter = text.lower()
         self._update_block_list()
     
-    def _load_textures(self) -> None:
+    def _load_textures(self):
         """Pre-loads block textures."""
         for block in self._blocks[:100]:  # Limit for performance
             if block.block_id not in self._texture_cache:
                 self._load_texture(block)
     
-    def _load_texture(self, block: BlockTexture) -> str:
-        """Loads a block texture for DPG."""
+    def _load_texture(self, block: BlockTexture) -> QPixmap:
+        """Loads a block texture."""
         if block.block_id in self._texture_cache:
             return self._texture_cache[block.block_id]
         
-        texture_tag = f"palette_{block.block_id}"
-        
         try:
             if block.texture_path.exists():
-                img = Image.open(block.texture_path).convert('RGBA')
-                img = img.resize((24, 24), Image.NEAREST)
+                pil_img = Image.open(block.texture_path).convert('RGBA')
+                pil_img = pil_img.resize((24, 24), Image.Resampling.NEAREST)
+                data = pil_img.tobytes("raw", "RGBA")
+                qimage = QImage(data, 24, 24, QImage.Format.Format_RGBA8888)
+                pixmap = QPixmap.fromImage(qimage)
             else:
                 color = block.avg_color if block.avg_color else (255, 0, 255)
-                img = Image.new('RGBA', (24, 24), (*color, 255))
-        except:
+                qimage = QImage(24, 24, QImage.Format.Format_RGBA8888)
+                qimage.fill(QColor(*color))
+                pixmap = QPixmap.fromImage(qimage)
+        except Exception:
             color = block.avg_color if block.avg_color else (255, 0, 255)
-            img = Image.new('RGBA', (24, 24), (*color, 255))
+            qimage = QImage(24, 24, QImage.Format.Format_RGBA8888)
+            qimage.fill(QColor(*color))
+            pixmap = QPixmap.fromImage(qimage)
         
-        # Convert to DPG format
-        texture_data = np.frombuffer(img.tobytes(), dtype=np.uint8)
-        texture_data = texture_data.reshape((img.height, img.width, 4))
-        texture_data = texture_data.astype(np.float32) / 255.0
-        
-        if dpg.does_item_exist(texture_tag):
-            dpg.delete_item(texture_tag)
-        
-        with dpg.texture_registry():
-            dpg.add_raw_texture(
-                width=img.width,
-                height=img.height,
-                default_value=texture_data,
-                format=dpg.mvFormat_Float_rgba,
-                tag=texture_tag
-            )
-        
-        self._texture_cache[block.block_id] = texture_tag
-        return texture_tag
+        self._texture_cache[block.block_id] = pixmap
+        return pixmap
     
-    def _update_block_list(self) -> None:
+    def _update_block_list(self):
         """Updates the displayed block list based on filter."""
         # Clear existing buttons
-        if dpg.does_item_exist(f"{self.tag}_blocks"):
-            dpg.delete_item(f"{self.tag}_blocks", children_only=True)
+        while self.blocks_layout.count():
+            child = self.blocks_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
         
-        self._block_buttons = []
+        self._block_buttons.clear()
         
         # Filter blocks
         filtered_blocks = [
@@ -171,61 +144,62 @@ class BlockPaletteWidget:
             if not self._search_filter or self._search_filter in b.block_id.lower()
         ]
         
-        # Create block buttons directly in the blocks group
+        # Create block buttons
         for block in filtered_blocks[:200]:  # Limit display
             self._create_block_button(block)
     
-    def _create_block_button(self, block: BlockTexture) -> None:
+    def _create_block_button(self, block: BlockTexture):
         """Creates a button for a block."""
-        button_tag = f"{self.tag}_btn_{block.block_id}"
-        
         # Ensure texture is loaded
         if block.block_id not in self._texture_cache:
             self._load_texture(block)
         
-        texture_tag = self._texture_cache.get(block.block_id)
+        pixmap = self._texture_cache.get(block.block_id)
         
-        with dpg.group(horizontal=True, parent=f"{self.tag}_blocks"):
-            # Image button
-            if texture_tag:
-                dpg.add_image_button(
-                    texture_tag,
-                    tag=button_tag,
-                    width=24,
-                    height=24,
-                    callback=lambda s, a, u: self._on_block_clicked(u),
-                    user_data=block
-                )
-            else:
-                dpg.add_button(
-                    label=" ",
-                    tag=button_tag,
-                    width=24,
-                    height=24,
-                    callback=lambda s, a, u: self._on_block_clicked(u),
-                    user_data=block
-                )
-            
-            # Block name
-            dpg.add_text(block.block_id)
+        # Create button with horizontal layout
+        button_widget = QWidget()
+        button_layout = QHBoxLayout(button_widget)
+        button_layout.setContentsMargins(2, 2, 2, 2)
+        button_layout.setSpacing(5)
         
-        self._block_buttons.append((button_tag, block))
+        # Image button
+        btn = QPushButton()
+        btn.setFixedSize(28, 28)
+        if pixmap:
+            btn.setIcon(pixmap)
+            btn.setIconSize(QSize(24, 24))
+        btn.clicked.connect(lambda checked, b=block: self._on_block_clicked(b))
+        btn.setProperty("block_id", block.block_id)
+        button_layout.addWidget(btn)
+        
+        # Block name label
+        # Remove 'minecraft:' prefix for display
+        display_name = block.block_id.replace('minecraft:', '')
+        name_label = QLabel(display_name)
+        name_label.setWordWrap(False)
+        button_layout.addWidget(name_label)
+        button_layout.addStretch()
+        
+        self.blocks_layout.addWidget(button_widget)
+        self._block_buttons.append(btn)
     
-    def _on_block_clicked(self, block: BlockTexture) -> None:
+    def _on_block_clicked(self, block: BlockTexture):
         """Handles block button click."""
         self.set_selected_block(block)
-        if self._on_block_selected:
-            self._on_block_selected(block)
+        self.block_selected.emit(block)
     
-    def _update_selected_display(self) -> None:
+    def _update_selected_display(self):
         """Updates the selected block display."""
         if self._selected_block:
-            dpg.set_value(f"{self.tag}_selected_name", self._selected_block.block_id)
+            self.selected_label.setText(self._selected_block.block_id)
         else:
-            dpg.set_value(f"{self.tag}_selected_name", "None")
+            self.selected_label.setText("None")
     
-    def _update_button_highlights(self) -> None:
+    def _update_button_highlights(self):
         """Updates button highlights based on selection."""
-        # Note: DPG doesn't have easy way to highlight buttons
-        # Could add colored border or text indicator in future
-        pass
+        for btn in self._block_buttons:
+            block_id = btn.property("block_id")
+            if self._selected_block and block_id == self._selected_block.block_id:
+                btn.setStyleSheet("background-color: #4080ff; border: 2px solid #60a0ff;")
+            else:
+                btn.setStyleSheet("")
