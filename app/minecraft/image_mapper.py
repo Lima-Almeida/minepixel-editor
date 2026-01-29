@@ -61,3 +61,38 @@ class ImageToBlockMapper:
                 progress_callback(progress)
         
         return grid
+    
+    def map_image_to_blocks(self, img: Image.Image, progress_callback=None) -> List[List[BlockTexture]]:
+        """
+        Maps a PIL Image to Minecraft blocks.
+        
+        Args:
+            img: PIL Image (RGB mode)
+            progress_callback: Optional callback function(progress: float) called with 0.0-1.0
+        
+        Returns:
+            Grid of BlockTexture objects
+        """
+        img = img.convert("RGB")
+        rgb = np.array(img)
+        rgb_norm = rgb.astype(np.float32) / 255.0
+        lab = color.rgb2lab(rgb_norm)
+
+        height, width, _ = lab.shape
+        grid: List[List[BlockTexture]] = []
+
+        for y in range(height):
+            row: List[BlockTexture] = []
+            for x in range(width):
+                pixel_lab = tuple(lab[y, x])
+                block = self.matcher.match_lab(pixel_lab)
+                row.append(block)
+            
+            grid.append(row)
+            
+            # Update progress
+            if progress_callback:
+                progress = (y + 1) / height
+                progress_callback(progress)
+        
+        return grid
