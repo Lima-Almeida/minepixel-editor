@@ -67,6 +67,7 @@ warped_fungus
 brown_mushroom_block
 red_mushroom_block
 mushroom_stem
+mushroom_block_inside
 
 # === NYLIUM AND MYCELIUM ===
 # Warped Nylium

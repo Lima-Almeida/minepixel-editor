@@ -19,7 +19,7 @@ from app.application import MinepixelEditorApp
 def main():
     """Main entry point."""
     print("="*70)
-    print("🎨 Minepixel Editor - PySide6 Version")
+    print("Minepixel Editor - PySide6 Version")
     print("="*70)
     print()
     print("[INFO] Initializing Qt application...")
@@ -37,7 +37,7 @@ def main():
     
     print("[INFO] Application ready!")
     print()
-    print("✅ Controls:")
+    print("Controls:")
     print("   • Load Image: File menu or Toolbar")
     print("   • Pan: Middle mouse button")
     print("   • Zoom: Mouse scroll wheel")
