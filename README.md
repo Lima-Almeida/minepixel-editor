@@ -13,7 +13,7 @@ The script will automatically:
 - Install all dependencies
 - Run the application
 
-Works on Windows, Linux, and macOS!
+Works on Windows, Linux, and macOS
 
 ## Features
 
