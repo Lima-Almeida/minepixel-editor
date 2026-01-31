@@ -2,6 +2,19 @@
 
 Image editor with the special functionality of converting any image into **Minecraft block pixel art**.
 
+## Quick Start
+
+```bash
+python setup_and_run.py
+```
+
+The script will automatically:
+- Create a virtual environment
+- Install all dependencies
+- Run the application
+
+Works on Windows, Linux, and macOS!
+
 ## Features
 
 - Image conversion to pixel art using Minecraft blocks
@@ -21,33 +34,6 @@ Basic Editing        █████████████████░░�
 Graphical Interface  █████████████░░░░░░░ 60% 
 Tools                ████░░░░░░░░░░░░░░░░ 20% 
 Cache/Persistence    ████░░░░░░░░░░░░░░░░ 20% 
-```
-
-
-## Architecture
-
-```
-app/
-├── core/
-│   └── renderer.py          # Renders block grid to image
-├── minecraft/
-│   ├── image_mapper.py      # Converts image to block grid
-│   └── texturepack/
-│       ├── models.py        # Data model (BlockTexture)
-│       ├── parser.py        # Loads Minecraft textures
-│       ├── analyzer.py      # Calculates average colors (RGB to LAB)
-│       ├── matcher.py       # Finds best block by color
-│       └── utils.py         # Helper functions
-
-assets/
-└── minecraft_textures/
-    └── blocks/              # Block PNG textures (16x16)
-
-data/
-└── blocks.json             # Block analysis cache
-└── ignored_textures.txt    # Manual texture filter list
-
-output/                     # Generated images
 ```
 
 ## How It Works
