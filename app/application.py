@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QObject, Signal
 
 from app.ui.main_window import MainWindow
+from app.ui.dialogs.resize_dialog import ResizeDialog
 from app.core.block_manager import BlockManager
 from app.core.exporter import Exporter
 from app.minecraft.image_mapper import ImageToBlockMapper
@@ -191,37 +192,17 @@ class MinepixelEditorApp(QObject):
             with Image.open(path) as img:
                 width, height = img.size
             
-            # Check if resize is needed (max 256x256)
-            max_dimension = 256
-            needs_resize = width > max_dimension or height > max_dimension
-            
-            if needs_resize:
-                # Calculate proportional resize
-                scale = max_dimension / max(width, height)
-                new_width = int(width * scale)
-                new_height = int(height * scale)
-                
-                # Ask user for confirmation
-                if self.main_window:
-                    message = (
-                        f"The selected image exceeds the maximum size of 256x256 pixels.\n\n"
-                        f"Original size: {width}x{height} pixels\n"
-                        f"Will be resized to: {new_width}x{new_height} pixels\n\n"
-                        f"This ensures the final pixel art fits within Minecraft's "
-                        f"performance limits (256x256 blocks maximum).\n\n"
-                        f"Continue?"
-                    )
+            # Show resize dialog
+            if self.main_window:
+                dialog = ResizeDialog(width, height, self.main_window)
+                if dialog.exec() == ResizeDialog.DialogCode.Accepted:
+                    target_width, target_height = dialog.get_dimensions()
+                    target_size = (target_width, target_height)
                     
-                    if not self.main_window.ask_question("Image Resize Required", message):
-                        self.main_window.set_status("Image import cancelled")
-                        return
-                
-                target_size = (new_width, new_height)
-            else:
-                target_size = None
-            
-            self.last_loaded_image = path
-            self._convert_and_load_image(path, target_size)
+                    self.last_loaded_image = path
+                    self._convert_and_load_image(path, target_size)
+                else:
+                    self.main_window.set_status("Image import cancelled")
             
         except Exception as e:
             if self.main_window:
