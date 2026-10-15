@@ -205,3 +205,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Local analysis and benchmarks (not part of the app)
+docs/
+bench/
+
+# Personal / outdated notes (not useful to public users)
+AI_SHOWCASE_CONTEXT.md
+PROJECT_CONTEXT.md
+RENDERING_OPTIMIZATIONS.md

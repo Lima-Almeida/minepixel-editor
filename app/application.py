@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QObject, Signal
 
 from app.ui.main_window import MainWindow
+from app.ui.dialogs.resize_dialog import ResizeDialog
 from app.core.block_manager import BlockManager
 from app.core.exporter import Exporter
 from app.minecraft.image_mapper import ImageToBlockMapper
@@ -45,6 +46,7 @@ class MinepixelEditorApp(QObject):
         
         # Application state
         self.last_loaded_image: Optional[Path] = None
+        self.last_target_size: Optional[tuple[int, int]] = None
     
     def setup(self):
         """Initialize Qt application and setup UI."""
@@ -191,37 +193,18 @@ class MinepixelEditorApp(QObject):
             with Image.open(path) as img:
                 width, height = img.size
             
-            # Check if resize is needed (max 256x256)
-            max_dimension = 256
-            needs_resize = width > max_dimension or height > max_dimension
-            
-            if needs_resize:
-                # Calculate proportional resize
-                scale = max_dimension / max(width, height)
-                new_width = int(width * scale)
-                new_height = int(height * scale)
-                
-                # Ask user for confirmation
-                if self.main_window:
-                    message = (
-                        f"The selected image exceeds the maximum size of 256x256 pixels.\n\n"
-                        f"Original size: {width}x{height} pixels\n"
-                        f"Will be resized to: {new_width}x{new_height} pixels\n\n"
-                        f"This ensures the final pixel art fits within Minecraft's "
-                        f"performance limits (256x256 blocks maximum).\n\n"
-                        f"Continue?"
-                    )
+            # Show resize dialog
+            if self.main_window:
+                dialog = ResizeDialog(width, height, self.main_window)
+                if dialog.exec() == ResizeDialog.DialogCode.Accepted:
+                    target_width, target_height = dialog.get_dimensions()
+                    target_size = (target_width, target_height)
                     
-                    if not self.main_window.ask_question("Image Resize Required", message):
-                        self.main_window.set_status("Image import cancelled")
-                        return
-                
-                target_size = (new_width, new_height)
-            else:
-                target_size = None
-            
-            self.last_loaded_image = path
-            self._convert_and_load_image(path, target_size)
+                    self.last_loaded_image = path
+                    self.last_target_size = target_size
+                    self._convert_and_load_image(path, target_size)
+                else:
+                    self.main_window.set_status("Image import cancelled")
             
         except Exception as e:
             if self.main_window:
@@ -351,6 +334,8 @@ class MinepixelEditorApp(QObject):
     def _on_settings_changed(self):
         """Handles settings change - update palette with new active blocks."""
         if self.main_window and self.block_manager:
+            # Keep the app matcher in sync with the filtered block list
+            self.matcher = self.block_manager.matcher
             self.main_window.set_blocks(self.block_manager.active_blocks)
             self.main_window.set_status(
                 f"Settings updated - {len(self.block_manager.active_blocks)} active blocks"
@@ -361,62 +346,20 @@ class MinepixelEditorApp(QObject):
         if not self.main_window:
             return
         
-        canvas = self.main_window.get_canvas()
-        if not canvas or not canvas._grid:
+        # Re-convert from the original image (not from the current blocks' average
+        # colors), so repeated re-renders don't lose fidelity
+        if not self.last_loaded_image:
+            self.main_window.set_status("No imported image to re-render")
             return
-        
-        try:
-            # Get current grid dimensions
-            height = len(canvas._grid)
-            width = len(canvas._grid[0]) if height > 0 else 0
-            
-            if width == 0 or height == 0:
-                return
-            
-            # Convert grid back to image, then re-convert with new blocks
-            # Create a temporary image from current colors
-            from PIL import Image
-            import numpy as np
-            
-            # Extract colors from current grid
-            img_array = np.zeros((height, width, 3), dtype=np.uint8)
-            for y in range(height):
-                for x in range(width):
-                    block = canvas._grid[y][x]
-                    if block and block.avg_color:
-                        img_array[y, x] = block.avg_color[:3]
-            
-            img = Image.fromarray(img_array, 'RGB')
-            
-            # Show progress
-            self.main_window.show_progress(0, 100, "Re-rendering with new blocks...")
-            
-            # Re-map with new blocks
-            from app.minecraft.image_mapper import ImageToBlockMapper
-            mapper = ImageToBlockMapper(self.block_manager.matcher)
-            
-            def progress_callback(progress: float):
-                progress_percent = int(progress * 100)
-                self.main_window.show_progress(progress_percent, 100, "Re-rendering...")
-                from PySide6.QtWidgets import QApplication
-                QApplication.processEvents()
-            
-            new_grid = mapper.map_image_to_blocks(img, progress_callback=progress_callback)
-            
-            # Update canvas
-            self.main_window.show_progress(100, 100, "Finalizing...")
-            self.main_window.set_grid(new_grid)
-            
-            # Update statistics
-            self._update_block_statistics(new_grid)
-            
-            self.main_window.hide_progress()
-            self.main_window.set_status("Image re-rendered with new block list")
-            
-        except Exception as e:
-            self.main_window.hide_progress()
-            self.main_window.show_error("Re-render Error", f"Failed to re-render image: {e}")
-            self.main_window.set_status("Re-render failed")
+
+        if not self.last_loaded_image.exists():
+            self.main_window.show_error(
+                "Re-render Error",
+                f"Original image not found: {self.last_loaded_image}"
+            )
+            return
+
+        self._convert_and_load_image(self.last_loaded_image, self.last_target_size)
     
     def _on_brush_size_changed(self, size: int):
         """Handles brush size change."""
