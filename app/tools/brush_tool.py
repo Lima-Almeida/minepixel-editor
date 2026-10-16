@@ -75,12 +75,8 @@ class BrushTool(BaseTool):
         # Paint all positions in brush area
         for x, y in positions:
             if 0 <= x < canvas._grid_width and 0 <= y < canvas._grid_height:
-                canvas.set_block_at(x, y, current_block, immediate_render=False)
-        
-        # Force immediate render during drag for responsive feedback
-        if canvas._dirty_blocks:
-            canvas.render()
-    
+                canvas.set_block_at(x, y, current_block)
+
     def on_mouse_down(self, canvas: CanvasWidget, grid_x: int, grid_y: int, button: str) -> None:
         """Paint on mouse down."""
         if button == "left":
@@ -115,9 +111,6 @@ class BrushTool(BaseTool):
     def on_mouse_up(self, canvas: CanvasWidget, grid_x: int, grid_y: int, button: str) -> None:
         """Finalize painting on mouse up."""
         self._last_painted_pos = None
-        # Force final render
-        if canvas._dirty_blocks or canvas._pending_render:
-            canvas.render(force_full=True)
     
     def get_cursor(self) -> str:
         """Returns cursor type."""

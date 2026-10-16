@@ -4,22 +4,23 @@ Manages block ignore list and application settings.
 """
 
 from __future__ import annotations
-from typing import Set, List, Dict
-from pathlib import Path
+from typing import Set
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QLineEdit, QCheckBox, QGroupBox,
-    QScrollArea, QWidget, QFrame, QMessageBox, QSplitter
+    QListWidget, QListWidgetItem, QLineEdit, QWidget, QMessageBox, QSplitter
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 
-from app.minecraft.texturepack.models import BlockTexture
-
 
 class SettingsDialog(QDialog):
-    """Dialog for managing application settings."""
+    """
+    Dialog for managing application settings.
+
+    The dialog only edits the two lists on screen; the BlockManager owns the
+    filtering rules and is changed only on "Save & Apply".
+    """
     
     settings_changed = Signal()
     re_render_requested = Signal()
@@ -32,8 +33,7 @@ class SettingsDialog(QDialog):
         self.resize(900, 600)
         
         self._setup_ui()
-        self._load_current_settings()
-    
+
     def _setup_ui(self):
         """Setup UI layout."""
         layout = QVBoxLayout(self)
@@ -45,7 +45,6 @@ class SettingsDialog(QDialog):
         # Statistics
         self.stats_label = QLabel()
         self.stats_label.setWordWrap(True)
-        self._update_statistics()
         layout.addWidget(self.stats_label)
         
         # Search
@@ -132,53 +131,30 @@ class SettingsDialog(QDialog):
         button_layout.addWidget(save_btn)
         
         layout.addLayout(button_layout)
-        
-        self._populate_lists()
-    
-    def _load_current_settings(self):
-        """Load current settings from block manager."""
-        pass  # Already loaded in _populate_lists
-    
+
+        self._populate_lists(self.block_manager.user_ignored_blocks)
+
     def _update_statistics(self):
-        """Update statistics display."""
-        total = len(self.block_manager.all_blocks) if self.block_manager else 0
-        active = len(self.block_manager.active_blocks) if self.block_manager else 0
-        ignored = total - active
+        """Update statistics display from the lists on screen."""
+        active = self.active_list.count()
+        ignored = self.ignored_list.count()
         self.stats_label.setText(
-            f"<b>Total Blocks:</b> {total} | "
+            f"<b>Block Types:</b> {active + ignored} | "
             f"<b>Active:</b> {active} | "
             f"<b>Ignored:</b> {ignored}"
         )
-    
-    def _populate_lists(self):
-        """Populate both lists with blocks."""
-        if not self.block_manager or not self.block_manager.all_blocks:
-            return
-        
-        # Group blocks by base name
-        from collections import defaultdict
-        from app.core.block_manager import BlockManager
-        
-        base_to_blocks = defaultdict(list)
-        for block in self.block_manager.all_blocks:
-            base_name = BlockManager.get_base_block_name(block.block_id)
-            base_to_blocks[base_name].append(block)
-        
-        # Sort base names
-        sorted_bases = sorted(base_to_blocks.keys())
-        
-        # Clear lists
+
+    def _populate_lists(self, ignored_bases: Set[str]):
+        """Populate both lists with base blocks, placing ignored_bases in the ignored list."""
         self.active_list.clear()
         self.ignored_list.clear()
-        
-        # Populate lists
-        for base_name in sorted_bases:
-            blocks = base_to_blocks[base_name]
+
+        grouped = self.block_manager.get_grouped_blocks()
+
+        for base_name in sorted(grouped):
+            blocks = list(grouped[base_name]['blocks'].values())
             display_block = blocks[0]
-            
-            # Check if ignored
-            is_ignored = base_name in self.block_manager.user_ignored_blocks
-            
+
             # Create display name with variant count
             display_name = base_name.replace('minecraft:', '')
             if len(blocks) > 1:
@@ -200,11 +176,21 @@ class SettingsDialog(QDialog):
                     pass
             
             # Add to appropriate list
-            if is_ignored:
+            if base_name in ignored_bases:
                 self.ignored_list.addItem(item)
             else:
                 self.active_list.addItem(item)
-    
+
+        self._filter_blocks()
+        self._update_statistics()
+
+    def _ignored_bases_on_screen(self) -> Set[str]:
+        """Base names currently in the ignored list."""
+        return {
+            self.ignored_list.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.ignored_list.count())
+        }
+
     def _filter_blocks(self):
         """Filter blocks based on search text."""
         search_text = self.search_input.text().lower()
@@ -225,7 +211,6 @@ class SettingsDialog(QDialog):
         """Move selected blocks from active to ignored."""
         selected_items = self.active_list.selectedItems()
         for item in selected_items:
-            base_name = item.data(Qt.ItemDataRole.UserRole)
             # Remove from active list
             row = self.active_list.row(item)
             self.active_list.takeItem(row)
@@ -238,7 +223,6 @@ class SettingsDialog(QDialog):
         """Move selected blocks from ignored to active."""
         selected_items = self.ignored_list.selectedItems()
         for item in selected_items:
-            base_name = item.data(Qt.ItemDataRole.UserRole)
             # Remove from ignored list
             row = self.ignored_list.row(item)
             self.ignored_list.takeItem(row)
@@ -273,54 +257,29 @@ class SettingsDialog(QDialog):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            # Reset to default
-            default_ignored = self.block_manager.default_ignored_blocks.copy()
-            
-            # Add transparent blocks
-            from app.core.block_manager import BlockManager
-            for block in self.block_manager.all_blocks:
-                if block.has_transparency:
-                    base_name = BlockManager.get_base_block_name(block.block_id)
-                    default_ignored.add(base_name)
-            
-            # Update block manager
-            self.block_manager.user_ignored_blocks = default_ignored
-            
-            # Repopulate lists
-            self._populate_lists()
-            self._update_statistics()
-    
+            # Only the lists change here; the BlockManager is updated on Save
+            self._populate_lists(self.block_manager.default_ignored_bases())
+
     def _save_and_apply(self):
         """Save settings and apply changes."""
-        # Collect ignored blocks from ignored list
-        new_ignored = set()
-        
-        for i in range(self.ignored_list.count()):
-            item = self.ignored_list.item(i)
-            base_name = item.data(Qt.ItemDataRole.UserRole)
-            new_ignored.add(base_name)
-        
-        # Update block manager
-        if self.block_manager:
-            old_active_count = len(self.block_manager.active_blocks)
-            
-            self.block_manager.user_ignored_blocks = new_ignored
-            self.block_manager._apply_filters()
-            
-            # Recreate matcher
-            if self.block_manager.active_blocks:
-                from app.minecraft.texturepack.matcher import BlockMatcher
-                self.block_manager.matcher = BlockMatcher(
-                    self.block_manager.active_blocks, 
-                    allow_transparency=False
-                )
-            
-            new_active_count = len(self.block_manager.active_blocks)
-        
+        if self.active_list.count() == 0:
+            QMessageBox.warning(
+                self,
+                "No Active Blocks",
+                "At least one block must stay active to convert images."
+            )
+            return
+
+        old_ignored = set(self.block_manager.user_ignored_blocks)
+        old_active_count = len(self.block_manager.active_blocks)
+
+        self.block_manager.set_ignored_blocks(self._ignored_bases_on_screen())
+        new_active_count = len(self.block_manager.active_blocks)
+
         self.settings_changed.emit()
-        
+
         # Ask about re-rendering if blocks changed
-        if old_active_count != new_active_count:
+        if self.block_manager.user_ignored_blocks != old_ignored:
             reply = QMessageBox.question(
                 self,
                 "Re-render Image?",
