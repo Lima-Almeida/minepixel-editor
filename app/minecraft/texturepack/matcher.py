@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 
-from typing import Iterable, Optional
-import math
+from typing import Iterable, List
+
+import numpy as np
+from scipy.spatial import cKDTree
 
 
 from .models import BlockTexture
@@ -12,7 +14,7 @@ class BlockMatcher:
     def __init__(self, blocks: Iterable[BlockTexture], allow_transparency: bool = False):
         """
         Initializes the block matcher.
-        
+
         Args:
             blocks: Iterable of BlockTexture objects
             allow_transparency: If False, ignores blocks with transparency (default: False)
@@ -22,34 +24,23 @@ class BlockMatcher:
             self.blocks = [b for b in blocks if b.lab_color is not None]
         else:
             self.blocks = [b for b in blocks if b.lab_color is not None and not b.has_transparency]
-    
+
         if not self.blocks:
             raise ValueError("No blocks with LAB color available for matching")
-        
 
-    def match_rgb(self, rgb: tuple[int, int, int]) -> BlockTexture:
-        raise NotImplementedError("Use match_lab() ou converta RGB para LAB antes")
-    
+        # KD-tree over the blocks' LAB colors. Matching uses Delta-E 76 (euclidean
+        # distance in LAB), which is exactly the KD-tree's nearest-neighbor metric
+        self._tree = cKDTree(np.array([b.lab_color for b in self.blocks], dtype=np.float64))
 
-    def match_lab(self, lab: tuple[float, float, float]) -> BlockTexture:
-        best_block: Optional[BlockTexture] = None
-        best_distance = math.inf
+    def match_lab_array(self, lab_pixels: np.ndarray) -> List[BlockTexture]:
+        """
+        Finds the nearest block (Delta-E 76) for many pixels at once.
 
-        for block in self.blocks:
-            d = self._delta_e(lab, block.lab_color)
+        Args:
+            lab_pixels: Array of shape (N, 3) with LAB colors
 
-            if d < best_distance:
-                best_distance = d
-                best_block = block
-        
-        return best_block
-    
-
-
-    @staticmethod
-    def _delta_e(lab1: tuple[float, float, float], lab2: tuple[float, float, float]) -> float:
-
-        # euclidian distance on LAB color space
-        distance = math.sqrt((lab1[0] - lab2[0]) ** 2 + (lab1[1] - lab2[1]) ** 2 + (lab1[2] - lab2[2]) ** 2)
-
-        return distance
+        Returns:
+            List of N BlockTexture objects (nearest block for each pixel)
+        """
+        _, indices = self._tree.query(np.asarray(lab_pixels, dtype=np.float64), k=1)
+        return [self.blocks[i] for i in indices]

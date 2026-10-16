@@ -85,11 +85,7 @@ class CanvasWidget(QGraphicsView):
         
         # Line drawing
         self._last_drawn_block: Tuple[int, int] = (-1, -1)
-        
-        # Compatibility attributes for tools
-        self._dirty_blocks: set = set()
-        self._pending_render: bool = False
-        
+
         # Hover highlight
         self._hover_highlight_item: Optional[QGraphicsPixmapItem] = None
     
@@ -141,14 +137,13 @@ class CanvasWidget(QGraphicsView):
             return self._grid[y][x]
         return None
     
-    def set_block_at(self, x: int, y: int, block: BlockTexture, immediate_render: bool = True) -> None:
-        """Sets block at coordinates.
-        
+    def set_block_at(self, x: int, y: int, block: BlockTexture) -> None:
+        """Sets block at coordinates (the scene item is updated immediately).
+
         Args:
             x: X coordinate
             y: Y coordinate
             block: BlockTexture to set
-            immediate_render: Compatibility parameter (ignored in Qt, always renders immediately)
         """
         if 0 <= y < self._grid_height and 0 <= x < self._grid_width:
             if self._grid[y][x].block_id == block.block_id:
