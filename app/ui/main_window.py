@@ -305,6 +305,7 @@ class MainWindow(QMainWindow):
         scroll_widget.setLayout(self.stats_layout)
         scroll_area.setWidget(scroll_widget)
         right_layout.addWidget(scroll_area)
+        self.stats_scroll_area = scroll_area
         
         # Export button
         export_list_btn = QPushButton("Export Block List to TXT")

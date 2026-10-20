@@ -10,7 +10,7 @@ from typing import List, Optional
 from PIL import Image
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from app.ui.main_window import MainWindow
 from app.ui.dialogs.resize_dialog import ResizeDialog
@@ -47,7 +47,16 @@ class MinepixelEditorApp(QObject):
         # Application state
         self.last_loaded_image: Optional[Path] = None
         self.last_target_size: Optional[tuple[int, int]] = None
-    
+
+        # Block statistics refresh after painting: each painted block restarts the
+        # timer, so the panel is rebuilt once, shortly after the stroke stops
+        self._stats_refresh_timer = QTimer(self)
+        self._stats_refresh_timer.setSingleShot(True)
+        self._stats_refresh_timer.setInterval(200)
+        self._stats_refresh_timer.timeout.connect(self._refresh_block_statistics)
+        self._thumbnail_cache: dict = {}
+        self._expanded_variant_sections: set = set()
+
     def setup(self):
         """Initialize Qt application and setup UI."""
         # Create main window
@@ -379,7 +388,28 @@ class MinepixelEditorApp(QObject):
             f"Block changed at ({x}, {y}) -> {block.block_id} | "
             f"Zoom: {info['zoom_level']:.1f}x | Grid: {info['grid_width']}x{info['grid_height']}"
         )
-    
+
+        # Material list: refresh once painting pauses (rebuilding it per block is too slow)
+        self._stats_refresh_timer.start()
+
+    def _refresh_block_statistics(self):
+        """Rebuilds the material list from the blocks currently on the canvas."""
+        if self.main_window:
+            self._update_block_statistics(self.main_window.get_canvas()._grid)
+
+    def _thumbnail(self, block, size: int):
+        """Returns a cached, scaled texture thumbnail (None if it can't be loaded)."""
+        from PySide6.QtGui import QPixmap
+        from PySide6.QtCore import Qt
+
+        key = (str(block.texture_path), size)
+        if key not in self._thumbnail_cache:
+            pixmap = QPixmap(str(block.texture_path))
+            self._thumbnail_cache[key] = None if pixmap.isNull() else pixmap.scaled(
+                size, size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation
+            )
+        return self._thumbnail_cache[key]
+
     def _on_selection_changed(self, x: int, y: int):
         """Called when hover position changes."""
         if not self.main_window:
@@ -413,10 +443,12 @@ class MinepixelEditorApp(QObject):
             return
         
         from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QPushButton, QWidget, QFrame, QLabel
-        from PySide6.QtGui import QPixmap
-        from PySide6.QtCore import Qt
         from app.core.block_manager import BlockManager
-        
+
+        # The list is rebuilt after every stroke: keep the scroll position
+        scroll_bar = self.main_window.stats_scroll_area.verticalScrollBar()
+        scroll_value = scroll_bar.value()
+
         # Clear previous widgets
         while self.main_window.stats_layout.count():
             item = self.main_window.stats_layout.takeAt(0)
@@ -466,16 +498,11 @@ class MinepixelEditorApp(QObject):
             header_layout.setSpacing(8)
             
             # Add texture image
-            if display_block and display_block.texture_path.exists():
-                try:
-                    texture_label = QLabel()
-                    pixmap = QPixmap(str(display_block.texture_path))
-                    if not pixmap.isNull():
-                        scaled_pixmap = pixmap.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation)
-                        texture_label.setPixmap(scaled_pixmap)
-                        header_layout.addWidget(texture_label)
-                except Exception:
-                    pass
+            thumbnail = self._thumbnail(display_block, 24) if display_block else None
+            if thumbnail:
+                texture_label = QLabel()
+                texture_label.setPixmap(thumbnail)
+                header_layout.addWidget(texture_label)
             
             # Add name and count
             # Remove 'minecraft:' prefix for cleaner display
@@ -487,16 +514,18 @@ class MinepixelEditorApp(QObject):
             # Add variants dropdown if multiple
             if has_variants:
                 # Create collapsible section
-                variants_btn = QPushButton(f"▶ {len(stats['variants'])} variants")
+                # (sections the user expanded stay expanded across refreshes)
+                expanded = base_name in self._expanded_variant_sections
+                variants_btn = QPushButton(f"{'▼' if expanded else '▶'} {len(stats['variants'])} variants")
                 variants_btn.setFlat(True)
                 variants_btn.setStyleSheet("text-align: left; padding: 2px;")
-                
+
                 # Variants container
                 variants_widget = QWidget()
                 variants_layout = QVBoxLayout(variants_widget)
                 variants_layout.setContentsMargins(20, 0, 0, 0)
                 variants_layout.setSpacing(2)
-                variants_widget.setVisible(False)
+                variants_widget.setVisible(expanded)
                 
                 # Add each variant
                 for variant, count in sorted(stats['variants'].items(), key=lambda x: x[1], reverse=True):
@@ -507,30 +536,29 @@ class MinepixelEditorApp(QObject):
                     variant_layout.setSpacing(8)
                     
                     # Variant texture
-                    if variant_block and variant_block.texture_path.exists():
-                        try:
-                            var_texture_label = QLabel()
-                            var_pixmap = QPixmap(str(variant_block.texture_path))
-                            if not var_pixmap.isNull():
-                                var_scaled = var_pixmap.scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation)
-                                var_texture_label.setPixmap(var_scaled)
-                                variant_layout.addWidget(var_texture_label)
-                        except Exception:
-                            pass
+                    var_thumbnail = self._thumbnail(variant_block, 20) if variant_block else None
+                    if var_thumbnail:
+                        var_texture_label = QLabel()
+                        var_texture_label.setPixmap(var_thumbnail)
+                        variant_layout.addWidget(var_texture_label)
                     
                     var_label = QLabel(f"{variant.capitalize()}: {count}")
                     variant_layout.addWidget(var_label, stretch=1)
                     variants_layout.addWidget(variant_widget)
                 
                 # Toggle function
-                def make_toggle(btn, widget):
+                def make_toggle(btn, widget, name):
                     def toggle():
                         visible = not widget.isVisible()
                         widget.setVisible(visible)
                         btn.setText(("▼" if visible else "▶") + btn.text()[1:])
+                        if visible:
+                            self._expanded_variant_sections.add(name)
+                        else:
+                            self._expanded_variant_sections.discard(name)
                     return toggle
-                
-                variants_btn.clicked.connect(make_toggle(variants_btn, variants_widget))
+
+                variants_btn.clicked.connect(make_toggle(variants_btn, variants_widget, base_name))
                 block_layout.addWidget(variants_btn)
                 block_layout.addWidget(variants_widget)
             
@@ -538,6 +566,9 @@ class MinepixelEditorApp(QObject):
         
         # Add stretch at the end
         self.main_window.stats_layout.addStretch()
+
+        # Restore the scroll position once the new widgets are laid out
+        QTimer.singleShot(0, lambda: scroll_bar.setValue(scroll_value))
 
     
     def run(self):
