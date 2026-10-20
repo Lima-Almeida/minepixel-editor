@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Dict
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from PIL import Image
 
@@ -103,24 +103,27 @@ class Exporter:
         if not block_grid:
             return {}
         
+        # Count each block id once over the grid; base names and variants are then
+        # resolved per distinct id (a few dozen) instead of per cell
+        id_counts = Counter(block.block_id for row in block_grid for block in row if block)
+        examples = {block.block_id: block for row in block_grid for block in row if block}
+
         # Count blocks by base name and variant
         block_counts = defaultdict(lambda: {
             'total': 0,
             'variants': defaultdict(int),
             'blocks': {}  # variant -> BlockTexture
         })
-        
-        for row in block_grid:
-            for block in row:
-                if block:
-                    base_name = get_base_block_name_func(block.block_id)
-                    variant = get_block_variant_func(block.block_id)
-                    
-                    block_counts[base_name]['total'] += 1
-                    block_counts[base_name]['variants'][variant] += 1
-                    
-                    # Store one example of each variant
-                    if variant not in block_counts[base_name]['blocks']:
-                        block_counts[base_name]['blocks'][variant] = block
-        
+
+        for block_id, count in id_counts.items():
+            base_name = get_base_block_name_func(block_id)
+            variant = get_block_variant_func(block_id)
+
+            block_counts[base_name]['total'] += count
+            block_counts[base_name]['variants'][variant] += count
+
+            # Store one example of each variant
+            if variant not in block_counts[base_name]['blocks']:
+                block_counts[base_name]['blocks'][variant] = examples[block_id]
+
         return dict(block_counts)

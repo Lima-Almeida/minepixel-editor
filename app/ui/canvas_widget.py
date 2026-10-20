@@ -334,11 +334,19 @@ class CanvasWidget(QGraphicsView):
             )
             
             event.accept()
-        elif self._is_drawing and self._current_block:
-            pos = self.mapToScene(event.pos())
-            grid_x = int(pos.x() / self._block_size)
-            grid_y = int(pos.y() / self._block_size)
-            
+            return
+
+        pos = self.mapToScene(event.pos())
+        grid_x = int(pos.x() / self._block_size)
+        grid_y = int(pos.y() / self._block_size)
+
+        # Hover highlight follows the cursor, also while drawing
+        if (grid_x, grid_y) != self._current_hover_block:
+            self._current_hover_block = (grid_x, grid_y)
+            self._update_hover_highlight(grid_x, grid_y)
+            self.selection_changed.emit(grid_x, grid_y)
+
+        if self._is_drawing and self._current_block:
             if 0 <= grid_x < self._grid_width and 0 <= grid_y < self._grid_height:
                 if self._active_tool:
                     self._active_tool.on_mouse_drag(self, grid_x, grid_y, "left")
@@ -354,15 +362,6 @@ class CanvasWidget(QGraphicsView):
             
             event.accept()
         else:
-            pos = self.mapToScene(event.pos())
-            grid_x = int(pos.x() / self._block_size)
-            grid_y = int(pos.y() / self._block_size)
-            
-            if (grid_x, grid_y) != self._current_hover_block:
-                self._current_hover_block = (grid_x, grid_y)
-                self._update_hover_highlight(grid_x, grid_y)
-                self.selection_changed.emit(grid_x, grid_y)
-            
             super().mouseMoveEvent(event)
     
     def mouseReleaseEvent(self, event):

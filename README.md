@@ -30,7 +30,7 @@ pytest
 - Block-based editing as if they were pixels: brush (sizes 1 to 15) and eyedropper
 - Intelligent color matching using LAB (CIELAB) color space, with fast KD-tree search
 - Block filter: choose which blocks can be used (transparent and non-solid blocks are excluded by default)
-- Material list export (TXT), grouped by block and sorted by quantity
+- Material list panel that updates as you paint, plus export to TXT (grouped by block and sorted by quantity)
 - High-resolution PNG export (16 px per block)
 - Optional visual grid to visualize blocks
 - Texture caching for optimized performance
